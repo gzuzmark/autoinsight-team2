@@ -43,3 +43,13 @@ export const ESTILOS: Record<Severidad, EstiloEstado> = {
     borde: "border-[#770209]",
   },
 }
+
+// Palabra de severidad para alertas (distinta de la palabra de estado usada
+// en KPIs y en el estado vacío): ALTA/MEDIA/BAJA, mapeada 1:1 con
+// parar/atencion/ok. Compartida por AlertStack y AlertDetail para que ambos
+// muestren siempre la misma palabra.
+export const SEVERIDAD_PALABRA: Record<Severidad, string> = {
+  parar: "ALTA",
+  atencion: "MEDIA",
+  ok: "BAJA",
+}

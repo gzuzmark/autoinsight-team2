@@ -45,14 +45,14 @@ export function PinPad({
       <div className="flex items-center gap-4">
         <span
           aria-hidden
-          className="flex h-20 w-20 items-center justify-center rounded-full text-[28px] font-black text-white"
+          className="flex h-20 w-20 items-center justify-center rounded-full text-3xl font-black text-white"
           style={{ backgroundColor: usuario.color }}
         >
           {usuario.iniciales}
         </span>
         <div>
-          <p className="text-[24px] font-semibold text-neutral-600">Ingresa tu PIN</p>
-          <p className="text-[28px] font-black text-neutral-900">{usuario.nombre}</p>
+          <p className="text-2xl font-semibold text-neutral-900">Ingresa tu PIN</p>
+          <p className="text-3xl font-black text-neutral-900">{usuario.nombre}</p>
         </div>
       </div>
 
@@ -71,7 +71,7 @@ export function PinPad({
         ))}
       </div>
 
-      <p className="h-8 text-[24px] font-bold text-[#c1121f]" role="alert">
+      <p className="h-8 text-2xl font-bold text-[#c1121f]" role="alert">
         {error ? "PIN incorrecto, intenta de nuevo" : ""}
       </p>
 
@@ -81,7 +81,7 @@ export function PinPad({
             key={t}
             type="button"
             onClick={() => agregar(t)}
-            className="h-24 w-24 rounded-2xl border-4 border-neutral-300 bg-white text-[40px] font-black text-neutral-900 active:border-neutral-900 active:bg-neutral-100"
+            className="h-24 w-24 rounded-2xl border-4 border-neutral-300 bg-white text-4xl font-black text-neutral-900 active:border-neutral-900 active:bg-neutral-100"
           >
             {t}
           </button>
@@ -91,7 +91,7 @@ export function PinPad({
           type="button"
           onClick={onVolver}
           aria-label="Volver a la lista de personas"
-          className="flex h-24 w-24 items-center justify-center rounded-2xl border-4 border-neutral-300 bg-white text-neutral-700 active:border-neutral-900"
+          className="flex h-24 w-24 items-center justify-center rounded-2xl border-4 border-neutral-300 bg-white text-neutral-900 active:border-neutral-900"
         >
           <ArrowLeft className="h-11 w-11" strokeWidth={2.5} />
         </button>
@@ -99,7 +99,7 @@ export function PinPad({
         <button
           type="button"
           onClick={() => agregar("0")}
-          className="h-24 w-24 rounded-2xl border-4 border-neutral-300 bg-white text-[40px] font-black text-neutral-900 active:border-neutral-900 active:bg-neutral-100"
+          className="h-24 w-24 rounded-2xl border-4 border-neutral-300 bg-white text-4xl font-black text-neutral-900 active:border-neutral-900 active:bg-neutral-100"
         >
           0
         </button>
@@ -108,7 +108,7 @@ export function PinPad({
           type="button"
           onClick={borrar}
           aria-label="Borrar último dígito"
-          className="flex h-24 w-24 items-center justify-center rounded-2xl border-4 border-neutral-300 bg-white text-neutral-700 active:border-neutral-900"
+          className="flex h-24 w-24 items-center justify-center rounded-2xl border-4 border-neutral-300 bg-white text-neutral-900 active:border-neutral-900"
         >
           <Delete className="h-11 w-11" strokeWidth={2.5} />
         </button>

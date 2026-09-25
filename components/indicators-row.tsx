@@ -14,8 +14,8 @@ export function IndicatorsRow() {
           >
             <Icono className="h-16 w-16 shrink-0" strokeWidth={2.5} aria-hidden />
             <div className="min-w-0">
-              <p className="text-[24px] font-bold uppercase tracking-wide">{ind.nombre}</p>
-              <p className="mt-1 text-[48px] font-black uppercase leading-none">{e.palabra}</p>
+              <p className="text-2xl font-bold uppercase tracking-wide">{ind.nombre}</p>
+              <p className="mt-1 text-5xl font-black uppercase leading-none">{e.palabra}</p>
             </div>
           </div>
         )

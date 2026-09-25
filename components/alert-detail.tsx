@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react"
 import { ArrowLeft, Check, Clock, MapPin, X } from "lucide-react"
 import { haceCuanto, type Alerta } from "@/lib/mock-data"
-import { ESTILOS } from "@/lib/status"
+import { ESTILOS, SEVERIDAD_PALABRA } from "@/lib/status"
 import { useApp } from "./app-provider"
 
 export function AlertDetail({ alerta, onCerrar }: { alerta: Alerta; onCerrar: () => void }) {
@@ -44,12 +44,12 @@ export function AlertDetail({ alerta, onCerrar }: { alerta: Alerta; onCerrar: ()
       <div className={`flex items-center gap-5 border-b-4 p-6 ${e.fondo} ${e.borde} ${e.textoSobreFondo}`}>
         <Icono className="h-20 w-20 shrink-0" strokeWidth={2.5} aria-hidden />
         <div className="min-w-0 flex-1">
-          <p className="text-[48px] font-black uppercase leading-none">{e.palabra}</p>
+          <p className="text-5xl font-black uppercase leading-none">{SEVERIDAD_PALABRA[alerta.severidad]}</p>
           <h2
             id="alert-detail-heading"
             ref={headingRef}
             tabIndex={-1}
-            className="mt-2 text-[34px] font-bold leading-tight outline-none"
+            className="mt-2 text-4xl font-bold leading-tight outline-none"
           >
             {alerta.titulo}
           </h2>
@@ -57,7 +57,7 @@ export function AlertDetail({ alerta, onCerrar }: { alerta: Alerta; onCerrar: ()
         <button
           type="button"
           onClick={onCerrar}
-          className="flex h-20 items-center gap-3 rounded-2xl border-4 border-current px-6 text-[24px] font-black"
+          className="flex h-22 items-center gap-3 rounded-2xl border-4 border-current px-6 text-2xl font-black"
         >
           <ArrowLeft className="h-9 w-9" strokeWidth={2.5} aria-hidden />
           Volver
@@ -65,7 +65,7 @@ export function AlertDetail({ alerta, onCerrar }: { alerta: Alerta; onCerrar: ()
       </div>
 
       <div className="flex flex-1 flex-col justify-center gap-6 px-10">
-        <div className="flex flex-wrap gap-x-12 gap-y-4 text-[28px] font-bold text-neutral-800">
+        <div className="flex flex-wrap gap-x-12 gap-y-4 text-4xl font-bold text-neutral-900">
           <span className="flex items-center gap-3">
             <MapPin className="h-9 w-9" strokeWidth={2.5} aria-hidden />
             {alerta.estacion}
@@ -75,7 +75,7 @@ export function AlertDetail({ alerta, onCerrar }: { alerta: Alerta; onCerrar: ()
             {haceCuanto(alerta.timestamp)}
           </span>
         </div>
-        <p className="max-w-[900px] text-[26px] font-semibold leading-snug text-neutral-700">
+        <p className="max-w-225 text-2xl font-semibold leading-snug text-neutral-900">
           Revisa la estación indicada y confirma la desviación. Cuando termines, marca esta alerta
           para cerrar el ciclo y dejar registro para el siguiente turno.
         </p>
@@ -85,7 +85,7 @@ export function AlertDetail({ alerta, onCerrar }: { alerta: Alerta; onCerrar: ()
         <button
           type="button"
           onClick={atender}
-          className="flex h-28 items-center justify-center gap-4 rounded-2xl border-4 border-neutral-900 bg-neutral-900 text-[32px] font-black text-white"
+          className="flex h-28 items-center justify-center gap-4 rounded-2xl border-4 border-neutral-900 bg-neutral-900 text-3xl font-black text-white"
         >
           <Check className="h-12 w-12" strokeWidth={2.5} aria-hidden />
           Atendida
@@ -93,7 +93,7 @@ export function AlertDetail({ alerta, onCerrar }: { alerta: Alerta; onCerrar: ()
         <button
           type="button"
           onClick={noAplica}
-          className="flex h-28 items-center justify-center gap-4 rounded-2xl border-4 border-neutral-400 bg-white text-[32px] font-black text-neutral-900"
+          className="flex h-28 items-center justify-center gap-4 rounded-2xl border-4 border-neutral-400 bg-white text-3xl font-black text-neutral-900"
         >
           <X className="h-12 w-12" strokeWidth={2.5} aria-hidden />
           No aplica

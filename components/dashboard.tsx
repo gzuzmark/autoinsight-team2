@@ -39,35 +39,33 @@ export function Dashboard({ usuario, demo }: { usuario: Usuario; demo: boolean }
 
   return (
     <div className="flex h-full w-full flex-col gap-4 p-4">
-      <header className="flex items-center justify-between rounded-2xl border-4 border-neutral-200 bg-white px-5 py-3">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-[28px] font-black text-neutral-900">{PLANTA_NOMBRE}</h1>
-          <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
-            <span className="text-[24px] font-bold text-neutral-700">Línea 3 · Motores</span>
-            <span className="text-[24px] font-semibold text-neutral-600">Turno mañana</span>
-            {montado && ultimaActualizacion !== null && (
-              <span className="text-[24px] font-semibold text-neutral-500">
-                Última actualización {formatearHora(ultimaActualizacion)}
-              </span>
-            )}
-          </div>
+      <header className="flex shrink-0 items-center justify-between gap-4 rounded-2xl border-4 border-neutral-200 bg-white px-5 py-2">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
+          <h1 className="whitespace-nowrap text-2xl font-black text-neutral-900">{PLANTA_NOMBRE}</h1>
+          <span className="whitespace-nowrap text-2xl font-bold text-neutral-900">Línea 3 · Motores</span>
+          <span className="whitespace-nowrap text-2xl font-semibold text-neutral-900">Turno mañana</span>
+          {montado && ultimaActualizacion !== null && (
+            <span className="whitespace-nowrap text-2xl font-semibold text-neutral-900">
+              Última actualización {formatearHora(ultimaActualizacion)}
+            </span>
+          )}
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex shrink-0 items-center gap-3">
           <div className="flex items-center gap-3">
             <span
               aria-hidden
-              className="flex h-14 w-14 items-center justify-center rounded-full text-[24px] font-black text-white"
+              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-2xl font-black text-white"
               style={{ backgroundColor: usuario.color }}
             >
               {usuario.iniciales}
             </span>
-            <span className="text-[24px] font-bold text-neutral-900">{usuario.nombre}</span>
+            <span className="whitespace-nowrap text-2xl font-bold text-neutral-900">{usuario.nombre}</span>
           </div>
           {demo && <DemoControls />}
           <button
             type="button"
             onClick={salir}
-            className="flex h-24 min-w-[96px] items-center justify-center gap-3 rounded-2xl border-4 border-neutral-300 px-6 text-[24px] font-black text-neutral-900"
+            className="flex h-22 shrink-0 items-center justify-center gap-3 whitespace-nowrap rounded-2xl border-4 border-neutral-300 px-6 text-2xl font-black text-neutral-900"
           >
             <LogOut className="h-9 w-9" strokeWidth={2.5} aria-hidden />
             Salir
