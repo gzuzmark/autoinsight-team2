@@ -29,6 +29,8 @@ export type Alerta = {
 const AHORA = Date.now()
 const min = (m: number) => AHORA - m * 60_000
 
+export const PLANTA_NOMBRE = "Planta Norte"
+
 export const USUARIOS: Usuario[] = [
   { id: "u1", nombre: "Ana Ríos", pin: "1234", iniciales: "AR", color: "#2563eb" },
   { id: "u2", nombre: "Beto Cruz", pin: "2468", iniciales: "BC", color: "#7c3aed" },
@@ -134,4 +136,14 @@ export function haceCuanto(timestamp: number): string {
   if (minutos < 60) return `hace ${minutos} min`
   const horas = Math.round(minutos / 60)
   return `hace ${horas} h`
+}
+
+/** Formats a timestamp as 24h HH:MM, es-AR style (e.g. "14:05"). */
+export function formatearHora(timestamp: number): string {
+  return new Date(timestamp).toLocaleTimeString("es-AR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "America/Argentina/Buenos_Aires",
+  })
 }

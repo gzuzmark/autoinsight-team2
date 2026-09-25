@@ -1,23 +1,32 @@
 "use client"
 
 import { Clock, MapPin } from "lucide-react"
-import { haceCuanto, type Alerta } from "@/lib/mock-data"
+import { haceCuanto, type Alerta, type Severidad } from "@/lib/mock-data"
 import { ESTILOS } from "@/lib/status"
+
+const SEVERIDAD_PALABRA: Record<Severidad, string> = {
+  parar: "ALTA",
+  atencion: "MEDIA",
+  ok: "BAJA",
+}
 
 export function AlertStack({
   alertas,
   onAbrir,
+  nuevasIds,
 }: {
   alertas: Alerta[]
   onAbrir: (a: Alerta) => void
+  nuevasIds: Set<string>
 }) {
   const visibles = alertas.slice(0, 3)
   const restantes = alertas.length - visibles.length
 
   if (alertas.length === 0) {
+    const e = ESTILOS.ok
     return (
-      <div className="flex flex-1 items-center justify-center rounded-2xl border-4 border-[#053d20] bg-[#0b5d33] text-white">
-        <p className="text-[32px] font-black">Sin alertas activas · Línea OK</p>
+      <div className={`flex flex-1 items-center justify-center rounded-2xl border-4 ${e.fondo} ${e.borde} ${e.textoSobreFondo}`}>
+        <p className="text-[32px] font-black">Sin alertas abiertas</p>
       </div>
     )
   }
@@ -25,11 +34,11 @@ export function AlertStack({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
       {visibles.map((a, i) => (
-        <AlertCard key={a.id} alerta={a} destacada={i === 0} onAbrir={onAbrir} />
+        <AlertCard key={a.id} alerta={a} destacada={i === 0} nueva={nuevasIds.has(a.id)} onAbrir={onAbrir} />
       ))}
       {restantes > 0 && (
         <div className="flex items-center justify-center rounded-2xl border-4 border-dashed border-neutral-400 py-3 text-[24px] font-black text-neutral-600">
-          +{restantes} {restantes === 1 ? "alerta más" : "alertas más"}
+          +{restantes} {restantes === 1 ? "alerta menos grave" : "alertas menos graves"}
         </div>
       )}
     </div>
@@ -39,10 +48,12 @@ export function AlertStack({
 function AlertCard({
   alerta,
   destacada,
+  nueva,
   onAbrir,
 }: {
   alerta: Alerta
   destacada: boolean
+  nueva: boolean
   onAbrir: (a: Alerta) => void
 }) {
   const e = ESTILOS[alerta.severidad]
@@ -51,10 +62,16 @@ function AlertCard({
     <button
       type="button"
       onClick={() => onAbrir(alerta)}
-      className={`flex w-full min-h-0 items-center gap-5 overflow-hidden rounded-2xl border-4 px-6 text-left transition-transform active:scale-[0.99] ${e.fondo} ${e.borde} ${e.textoSobreFondo} ${
+      className={`relative flex w-full min-h-0 items-center gap-5 overflow-hidden rounded-2xl border-4 px-6 text-left ${e.fondo} ${e.borde} ${e.textoSobreFondo} ${
         destacada ? "flex-[5] py-4" : "flex-[3] py-3"
       }`}
     >
+      {nueva && (
+        <span className="absolute right-5 top-5 flex items-center">
+          <span className="h-5 w-5 rounded-full bg-current" aria-hidden />
+          <span className="sr-only">Nueva</span>
+        </span>
+      )}
       <Icono
         className={destacada ? "h-24 w-24 shrink-0" : "h-14 w-14 shrink-0"}
         strokeWidth={2.5}
@@ -62,7 +79,7 @@ function AlertCard({
       />
       <div className="min-w-0 flex-1">
         <p className={`font-black uppercase leading-none ${destacada ? "text-[48px]" : "text-[26px]"}`}>
-          {e.palabra}
+          {SEVERIDAD_PALABRA[alerta.severidad]}
         </p>
         <p
           className={`mt-2 font-bold leading-tight ${destacada ? "text-[34px]" : "text-[24px]"}`}
@@ -70,7 +87,7 @@ function AlertCard({
           {alerta.titulo}
         </p>
         <div
-          className={`mt-2 flex flex-wrap items-center gap-x-6 gap-y-1 font-semibold opacity-95 ${
+          className={`mt-2 flex flex-wrap items-center gap-x-6 gap-y-1 font-semibold ${
             destacada ? "text-[24px]" : "text-[20px]"
           }`}
         >

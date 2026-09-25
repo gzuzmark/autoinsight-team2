@@ -6,7 +6,6 @@ import { AppProvider, useApp } from "@/components/app-provider"
 import { LoginAvatars } from "@/components/login-avatars"
 import { PinPad } from "@/components/pin-pad"
 import { Dashboard } from "@/components/dashboard"
-import { SinceLastVisit } from "@/components/since-last-visit"
 import { DemoControls } from "@/components/demo-controls"
 
 export default function Page() {
@@ -18,13 +17,7 @@ export default function Page() {
 }
 
 function Shell() {
-  const {
-    usuario,
-    ingresar,
-    mostrarUltimaVisita,
-    cambiosDesdeUltimaVisita,
-    cerrarUltimaVisita,
-  } = useApp()
+  const { usuario, ingresar } = useApp()
   const [seleccionado, setSeleccionado] = useState<Usuario | null>(null)
   const [demo, setDemo] = useState(false)
 
@@ -50,9 +43,6 @@ function Shell() {
       ) : (
         <>
           <Dashboard usuario={usuario} />
-          {mostrarUltimaVisita && (
-            <SinceLastVisit cambios={cambiosDesdeUltimaVisita} onContinuar={cerrarUltimaVisita} />
-          )}
           {demo && <DemoControls />}
         </>
       )}

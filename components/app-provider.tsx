@@ -15,10 +15,11 @@ type AppState = {
   alertas: Alerta[]
   alertasActivas: Alerta[]
   cambiosDesdeUltimaVisita: Alerta[]
-  mostrarUltimaVisita: boolean
+  esPrimeraVisita: boolean
+  ultimoLogoutTs: number | null
+  ultimaActualizacion: number | null
   ingresar: (usuario: Usuario) => void
   salir: () => void
-  cerrarUltimaVisita: () => void
   marcarAtendida: (id: string) => void
   marcarNoAplica: (id: string) => void
   simularCambioTurno: () => void
@@ -30,22 +31,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [usuario, setUsuario] = useState<Usuario | null>(null)
   const [alertas, setAlertas] = useState<Alerta[]>(() => ordenarAlertas(ALERTAS_INICIALES))
   const [cambiosDesdeUltimaVisita, setCambios] = useState<Alerta[]>([])
-  const [mostrarUltimaVisita, setMostrarUltimaVisita] = useState(false)
+  const [esPrimeraVisita, setEsPrimeraVisita] = useState(true)
+  const [ultimoLogoutTs, setUltimoLogoutTs] = useState<number | null>(null)
+  const [ultimaActualizacion, setUltimaActualizacion] = useState<number | null>(null)
 
-  // Ids vistos por cada usuario en su último cierre de sesión (baseline de
-  // "desde tu última visita"). No se persiste entre recargas de página.
+  // Baseline por usuario: ids vistos y hora de su último cierre de sesión.
+  // No se persiste entre recargas de página (estado en memoria del cliente).
   const vistoPorUsuario = useRef<Record<string, string[]>>({})
+  const logoutPorUsuario = useRef<Record<string, number>>({})
 
   const alertasActivas = useMemo(() => activeAlerts(alertas), [alertas])
 
   const ingresar = useCallback(
     (u: Usuario) => {
       const vistoAntes = vistoPorUsuario.current[u.id]
-      const cambios = changesSinceLastVisit(alertas, vistoAntes)
-      if (cambios.length > 0) {
-        setCambios(cambios)
-        setMostrarUltimaVisita(true)
-      }
+      const primeraVisita = vistoAntes === undefined
+      setCambios(changesSinceLastVisit(alertas, vistoAntes))
+      setEsPrimeraVisita(primeraVisita)
+      setUltimoLogoutTs(primeraVisita ? null : (logoutPorUsuario.current[u.id] ?? null))
+      setUltimaActualizacion(Date.now())
       setUsuario(u)
     },
     [alertas],
@@ -54,15 +58,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const salir = useCallback(() => {
     if (usuario) {
       vistoPorUsuario.current[usuario.id] = alertasActivas.map((a) => a.id)
+      logoutPorUsuario.current[usuario.id] = Date.now()
     }
     setUsuario(null)
-    setMostrarUltimaVisita(false)
     setCambios([])
   }, [usuario, alertasActivas])
-
-  const cerrarUltimaVisita = useCallback(() => {
-    setMostrarUltimaVisita(false)
-  }, [])
 
   const marcarAtendida = useCallback((id: string) => {
     setAlertas((prev) => attendAlert(prev, id))
@@ -75,9 +75,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const simularCambioTurno = useCallback(() => {
     const { alerts, added } = mergeShiftAlerts(alertas, ALERTAS_NUEVO_TURNO, Date.now())
     if (added.length > 0) {
-      setCambios(added)
-      setMostrarUltimaVisita(true)
+      setCambios((prev) => ordenarAlertas([...prev, ...added]))
     }
+    setUltimaActualizacion(Date.now())
     setAlertas(alerts)
   }, [alertas])
 
@@ -86,10 +86,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     alertas,
     alertasActivas,
     cambiosDesdeUltimaVisita,
-    mostrarUltimaVisita,
+    esPrimeraVisita,
+    ultimoLogoutTs,
+    ultimaActualizacion,
     ingresar,
     salir,
-    cerrarUltimaVisita,
     marcarAtendida,
     marcarNoAplica,
     simularCambioTurno,
