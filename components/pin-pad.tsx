@@ -81,7 +81,7 @@ export function PinPad({
             key={t}
             type="button"
             onClick={() => agregar(t)}
-            className="h-24 w-24 rounded-2xl border-4 border-neutral-300 bg-white text-[40px] font-black text-neutral-900 transition-colors active:border-neutral-900 active:bg-neutral-100"
+            className="h-24 w-24 rounded-2xl border-4 border-neutral-300 bg-white text-[40px] font-black text-neutral-900 active:border-neutral-900 active:bg-neutral-100"
           >
             {t}
           </button>
@@ -91,7 +91,7 @@ export function PinPad({
           type="button"
           onClick={onVolver}
           aria-label="Volver a la lista de personas"
-          className="flex h-24 w-24 items-center justify-center rounded-2xl border-4 border-neutral-300 bg-white text-neutral-700 transition-colors active:border-neutral-900"
+          className="flex h-24 w-24 items-center justify-center rounded-2xl border-4 border-neutral-300 bg-white text-neutral-700 active:border-neutral-900"
         >
           <ArrowLeft className="h-11 w-11" strokeWidth={2.5} />
         </button>
@@ -99,7 +99,7 @@ export function PinPad({
         <button
           type="button"
           onClick={() => agregar("0")}
-          className="h-24 w-24 rounded-2xl border-4 border-neutral-300 bg-white text-[40px] font-black text-neutral-900 transition-colors active:border-neutral-900 active:bg-neutral-100"
+          className="h-24 w-24 rounded-2xl border-4 border-neutral-300 bg-white text-[40px] font-black text-neutral-900 active:border-neutral-900 active:bg-neutral-100"
         >
           0
         </button>
@@ -108,7 +108,7 @@ export function PinPad({
           type="button"
           onClick={borrar}
           aria-label="Borrar último dígito"
-          className="flex h-24 w-24 items-center justify-center rounded-2xl border-4 border-neutral-300 bg-white text-neutral-700 transition-colors active:border-neutral-900"
+          className="flex h-24 w-24 items-center justify-center rounded-2xl border-4 border-neutral-300 bg-white text-neutral-700 active:border-neutral-900"
         >
           <Delete className="h-11 w-11" strokeWidth={2.5} />
         </button>
