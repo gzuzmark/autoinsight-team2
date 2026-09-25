@@ -12,13 +12,10 @@ export function IndicatorsRow() {
             key={ind.id}
             className={`flex items-center gap-4 rounded-2xl border-4 p-4 ${e.fondo} ${e.borde} ${e.textoSobreFondo}`}
           >
-            <Icono className="h-14 w-14 shrink-0" strokeWidth={2.5} aria-hidden />
+            <Icono className="h-16 w-16 shrink-0" strokeWidth={2.5} aria-hidden />
             <div className="min-w-0">
-              <p className="text-[20px] font-bold uppercase tracking-wide opacity-90">
-                {ind.nombre}
-              </p>
-              <p className="text-[44px] font-black leading-none">{ind.valor}</p>
-              <p className="mt-1 text-[22px] font-black uppercase leading-none">{e.palabra}</p>
+              <p className="text-[24px] font-bold uppercase tracking-wide">{ind.nombre}</p>
+              <p className="mt-1 text-[48px] font-black uppercase leading-none">{e.palabra}</p>
             </div>
           </div>
         )
