@@ -1,7 +1,14 @@
 "use client"
 
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react"
-import { activeAlerts, attendAlert, changesSinceLastVisit, dismissAlert, mergeShiftAlerts } from "@/lib/domain/alerts"
+import {
+  activeAlerts,
+  attendAlert,
+  changesSinceLastVisit,
+  dismissAlert,
+  mergeShiftAlerts,
+  newSinceVisit,
+} from "@/lib/domain/alerts"
 import {
   ALERTAS_INICIALES,
   ALERTAS_NUEVO_TURNO,
@@ -15,6 +22,7 @@ type AppState = {
   alertas: Alerta[]
   alertasActivas: Alerta[]
   cambiosDesdeUltimaVisita: Alerta[]
+  totalNuevosDesdeVisita: number
   esPrimeraVisita: boolean
   ultimoLogoutTs: number | null
   ultimaActualizacion: number | null
@@ -30,7 +38,12 @@ const Ctx = createContext<AppState | null>(null)
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [usuario, setUsuario] = useState<Usuario | null>(null)
   const [alertas, setAlertas] = useState<Alerta[]>(() => ordenarAlertas(ALERTAS_INICIALES))
-  const [cambiosDesdeUltimaVisita, setCambios] = useState<Alerta[]>([])
+  // Ids marcados como "nuevos" al ingresar o al simular un cambio de turno
+  // (F1): NO es la lista final a mostrar. `cambiosDesdeUltimaVisita` se
+  // deriva de esto filtrando contra las alertas activas actuales, así que
+  // un id sigue en `nuevosIds` incluso después de atender/marcar no aplica
+  // esa alerta, pero desaparece del resultado visible automáticamente.
+  const [nuevosIds, setNuevosIds] = useState<string[]>([])
   const [esPrimeraVisita, setEsPrimeraVisita] = useState(true)
   const [ultimoLogoutTs, setUltimoLogoutTs] = useState<number | null>(null)
   const [ultimaActualizacion, setUltimaActualizacion] = useState<number | null>(null)
@@ -41,12 +54,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const logoutPorUsuario = useRef<Record<string, number>>({})
 
   const alertasActivas = useMemo(() => activeAlerts(alertas), [alertas])
+  const nuevosIdsSet = useMemo(() => new Set(nuevosIds), [nuevosIds])
+  const cambiosDesdeUltimaVisita = useMemo(
+    () => newSinceVisit(alertasActivas, nuevosIdsSet),
+    [alertasActivas, nuevosIdsSet],
+  )
 
   const ingresar = useCallback(
     (u: Usuario) => {
       const vistoAntes = vistoPorUsuario.current[u.id]
       const primeraVisita = vistoAntes === undefined
-      setCambios(changesSinceLastVisit(alertas, vistoAntes))
+      setNuevosIds(changesSinceLastVisit(alertas, vistoAntes).map((a) => a.id))
       setEsPrimeraVisita(primeraVisita)
       setUltimoLogoutTs(primeraVisita ? null : (logoutPorUsuario.current[u.id] ?? null))
       setUltimaActualizacion(Date.now())
@@ -61,7 +79,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       logoutPorUsuario.current[usuario.id] = Date.now()
     }
     setUsuario(null)
-    setCambios([])
+    setNuevosIds([])
   }, [usuario, alertasActivas])
 
   const marcarAtendida = useCallback((id: string) => {
@@ -75,7 +93,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const simularCambioTurno = useCallback(() => {
     const { alerts, added } = mergeShiftAlerts(alertas, ALERTAS_NUEVO_TURNO, Date.now())
     if (added.length > 0) {
-      setCambios((prev) => ordenarAlertas([...prev, ...added]))
+      setNuevosIds((prev) => [...prev, ...added.map((a) => a.id)])
     }
     setUltimaActualizacion(Date.now())
     setAlertas(alerts)
@@ -86,6 +104,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     alertas,
     alertasActivas,
     cambiosDesdeUltimaVisita,
+    totalNuevosDesdeVisita: nuevosIds.length,
     esPrimeraVisita,
     ultimoLogoutTs,
     ultimaActualizacion,

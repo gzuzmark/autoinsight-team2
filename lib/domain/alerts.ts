@@ -58,6 +58,62 @@ export function changesSinceLastVisit(
   return activeAlerts(alerts).filter((a) => !seen.has(a.id))
 }
 
+/**
+ * Returns the subset of `active` whose id is in `newIds` (the ids recorded
+ * as new at login/shift-simulation time). Because `active` already excludes
+ * attended/no_aplica alerts, an id that was new but has since been resolved
+ * simply falls out of this result — the caller does not need to remove it
+ * from `newIds` itself.
+ */
+export function newSinceVisit(active: readonly Alerta[], newIds: ReadonlySet<string>): Alerta[] {
+  return active.filter((a) => newIds.has(a.id))
+}
+
+export type StationChangeGroup = {
+  estacion: string
+  alertas: Alerta[]
+}
+
+/**
+ * Groups `changes` by station, preserving the order stations first appear
+ * in. Callers pass already-sorted changes (see sortAlerts/activeAlerts), so
+ * the most severe station keeps appearing first.
+ */
+export function groupChangesByStation(changes: readonly Alerta[]): StationChangeGroup[] {
+  const order: string[] = []
+  const byStation = new Map<string, Alerta[]>()
+  for (const a of changes) {
+    let group = byStation.get(a.estacion)
+    if (!group) {
+      group = []
+      byStation.set(a.estacion, group)
+      order.push(a.estacion)
+    }
+    group.push(a)
+  }
+  return order.map((estacion) => ({ estacion, alertas: byStation.get(estacion)! }))
+}
+
+export type FocusTarget = { kind: "alert"; id: string } | { kind: "empty" }
+
+/**
+ * Decides which alert card should receive focus after `resolvedId` is
+ * removed from `visibleIds` (the ids currently rendered, top to bottom,
+ * BEFORE removal): the card that now occupies the resolved alert's old
+ * position, falling back to the first remaining card, or "empty" when none
+ * remain.
+ */
+export function focusTargetAfterResolve(
+  visibleIds: readonly string[],
+  resolvedId: string,
+): FocusTarget {
+  const index = visibleIds.indexOf(resolvedId)
+  const remaining = visibleIds.filter((id) => id !== resolvedId)
+  if (remaining.length === 0) return { kind: "empty" }
+  const id = remaining[index] ?? remaining[0]
+  return { kind: "alert", id }
+}
+
 export type MergeShiftAlertsResult = {
   alerts: Alerta[]
   added: Alerta[]

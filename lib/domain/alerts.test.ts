@@ -5,7 +5,10 @@ import {
   attendAlert,
   changesSinceLastVisit,
   dismissAlert,
+  focusTargetAfterResolve,
+  groupChangesByStation,
   mergeShiftAlerts,
+  newSinceVisit,
   sortAlerts,
 } from "./alerts"
 
@@ -284,6 +287,76 @@ describe("mergeShiftAlerts", () => {
     expect(alerts[0].timestamp).toBe(500)
     expect(added).toHaveLength(1)
     expect(added[0].titulo).toBe("primero")
+  })
+})
+
+describe("newSinceVisit", () => {
+  it("keeps only active alerts whose id is in newIds", () => {
+    const kept = makeAlert({ id: "kept", estado: "nueva" })
+    const notNew = makeAlert({ id: "not-new", estado: "nueva" })
+    const active = deepFreeze([kept, notNew])
+
+    const result = newSinceVisit(active, new Set(["kept"]))
+
+    expect(result.map((a) => a.id)).toEqual(["kept"])
+  })
+
+  it("drops an id from the result once it is no longer in the active list (attended/no_aplica)", () => {
+    // Simulates F1: an id stays in newIds (recorded at login) but the alert
+    // it pointed to has since been attended/dismissed and is no longer
+    // active, so it must disappear from the since-last-visit strip too.
+    const stillActive = makeAlert({ id: "still-active", estado: "nueva" })
+    const active = deepFreeze([stillActive])
+
+    const result = newSinceVisit(active, new Set(["still-active", "resolved-and-gone"]))
+
+    expect(result.map((a) => a.id)).toEqual(["still-active"])
+  })
+
+  it("returns [] when newIds is empty", () => {
+    const active = deepFreeze([makeAlert({ id: "a1", estado: "nueva" })])
+
+    expect(newSinceVisit(active, new Set())).toEqual([])
+  })
+})
+
+describe("groupChangesByStation", () => {
+  it("groups changes by station, preserving first-appearance order", () => {
+    const a1 = makeAlert({ id: "a1", estacion: "E1", severidad: "parar", timestamp: 3 })
+    const a2 = makeAlert({ id: "a2", estacion: "E2", severidad: "atencion", timestamp: 2 })
+    const a3 = makeAlert({ id: "a3", estacion: "E1", severidad: "parar", timestamp: 1 })
+    const changes = deepFreeze([a1, a2, a3])
+
+    const result = groupChangesByStation(changes)
+
+    expect(result).toEqual([
+      { estacion: "E1", alertas: [a1, a3] },
+      { estacion: "E2", alertas: [a2] },
+    ])
+  })
+
+  it("returns [] for no changes", () => {
+    expect(groupChangesByStation([])).toEqual([])
+  })
+})
+
+describe("focusTargetAfterResolve", () => {
+  it("targets the card now at the resolved alert's old position", () => {
+    const result = focusTargetAfterResolve(["a", "b", "c"], "b")
+
+    expect(result).toEqual({ kind: "alert", id: "c" })
+  })
+
+  it("falls back to the first remaining card when the resolved alert was last", () => {
+    const result = focusTargetAfterResolve(["a", "b", "c"], "c")
+
+    expect(result).toEqual({ kind: "alert", id: "a" })
+  })
+
+  it("returns 'empty' when the resolved alert was the only one visible", () => {
+    const result = focusTargetAfterResolve(["only"], "only")
+
+    expect(result).toEqual({ kind: "empty" })
   })
 })
 

@@ -11,8 +11,15 @@ import { SinceLastVisit } from "./since-last-visit"
 import { DemoControls } from "./demo-controls"
 
 export function Dashboard({ usuario, demo }: { usuario: Usuario; demo: boolean }) {
-  const { alertasActivas, salir, cambiosDesdeUltimaVisita, esPrimeraVisita, ultimoLogoutTs, ultimaActualizacion } =
-    useApp()
+  const {
+    alertasActivas,
+    salir,
+    cambiosDesdeUltimaVisita,
+    totalNuevosDesdeVisita,
+    esPrimeraVisita,
+    ultimoLogoutTs,
+    ultimaActualizacion,
+  } = useApp()
   const [abierta, setAbierta] = useState<Alerta | null>(null)
   const [montado, setMontado] = useState(false)
   const disparadorRef = useRef<HTMLButtonElement | null>(null)
@@ -76,6 +83,7 @@ export function Dashboard({ usuario, demo }: { usuario: Usuario; demo: boolean }
       <SinceLastVisit
         primeraVisita={esPrimeraVisita}
         cambios={cambiosDesdeUltimaVisita}
+        totalNuevos={totalNuevosDesdeVisita}
         ultimoLogoutTs={ultimoLogoutTs}
       />
 
