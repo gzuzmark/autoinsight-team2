@@ -9,11 +9,10 @@ import { AlertStack } from "./alert-stack"
 import { AlertDetail } from "./alert-detail"
 
 export function Dashboard({ usuario }: { usuario: Usuario }) {
-  const { alertasActivas, salir, registrarPrimerToque } = useApp()
+  const { alertasActivas, salir } = useApp()
   const [abierta, setAbierta] = useState<Alerta | null>(null)
 
   function abrir(a: Alerta) {
-    registrarPrimerToque()
     setAbierta(a)
   }
 

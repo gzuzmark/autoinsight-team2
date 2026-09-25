@@ -1,10 +1,10 @@
 "use client"
 
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react"
+import { activeAlerts, attendAlert, changesSinceLastVisit, giveFeedback, mergeShiftAlerts } from "@/lib/domain/alerts"
 import {
   ALERTAS_INICIALES,
   ALERTAS_NUEVO_TURNO,
-  INDICADORES,
   ordenarAlertas,
   type Alerta,
   type Feedback,
@@ -20,7 +20,6 @@ type AppState = {
   ingresar: (usuario: Usuario) => void
   salir: () => void
   cerrarUltimaVisita: () => void
-  registrarPrimerToque: () => void
   darFeedback: (id: string, feedback: Exclude<Feedback, null>) => void
   marcarAtendida: (id: string) => void
   simularCambioTurno: () => void
@@ -34,92 +33,54 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [cambiosDesdeUltimaVisita, setCambios] = useState<Alerta[]>([])
   const [mostrarUltimaVisita, setMostrarUltimaVisita] = useState(false)
 
-  // Medición (solo para la prueba). No se persiste.
-  const ingresoTs = useRef<number>(0)
-  const primerToqueHecho = useRef(false)
-  const sesionesPorUsuario = useRef<Record<string, number>>({})
+  // Ids vistos por cada usuario en su último cierre de sesión (baseline de
+  // "desde tu última visita"). No se persiste entre recargas de página.
   const vistoPorUsuario = useRef<Record<string, string[]>>({})
 
-  const alertasActivas = useMemo(
-    () => ordenarAlertas(alertas.filter((a) => a.estado === "nueva")),
+  const alertasActivas = useMemo(() => activeAlerts(alertas), [alertas])
+
+  const ingresar = useCallback(
+    (u: Usuario) => {
+      const vistoAntes = vistoPorUsuario.current[u.id]
+      const cambios = changesSinceLastVisit(alertas, vistoAntes)
+      if (cambios.length > 0) {
+        setCambios(cambios)
+        setMostrarUltimaVisita(true)
+      }
+      setUsuario(u)
+    },
     [alertas],
   )
 
-  const ingresar = useCallback((u: Usuario) => {
-    const sesiones = (sesionesPorUsuario.current[u.id] ?? 0) + 1
-    sesionesPorUsuario.current[u.id] = sesiones
-    ingresoTs.current = Date.now()
-    primerToqueHecho.current = false
-
-    console.log(`[v0] Ingreso de ${u.nombre} (${u.id}) · sesión #${sesiones} de hoy`)
-
-    // ¿Qué cambió desde la última visita de este usuario?
-    const vistoAntes = vistoPorUsuario.current[u.id]
-    setAlertas((prev) => {
-      const activas = prev.filter((a) => a.estado === "nueva")
-      if (vistoAntes) {
-        const nuevas = activas.filter((a) => !vistoAntes.includes(a.id))
-        if (nuevas.length > 0) {
-          setCambios(ordenarAlertas(nuevas))
-          setMostrarUltimaVisita(true)
-        }
-      }
-      return prev
-    })
-
-    setUsuario(u)
-  }, [])
-
   const salir = useCallback(() => {
-    setUsuario((u) => {
-      if (u) {
-        vistoPorUsuario.current[u.id] = alertasActivas.map((a) => a.id)
-      }
-      return null
-    })
+    if (usuario) {
+      vistoPorUsuario.current[usuario.id] = alertasActivas.map((a) => a.id)
+    }
+    setUsuario(null)
     setMostrarUltimaVisita(false)
     setCambios([])
-  }, [alertasActivas])
+  }, [usuario, alertasActivas])
 
   const cerrarUltimaVisita = useCallback(() => {
     setMostrarUltimaVisita(false)
-    ingresoTs.current = Date.now()
   }, [])
 
-  const registrarPrimerToque = useCallback(() => {
-    if (primerToqueHecho.current || !usuario) return
-    primerToqueHecho.current = true
-    const segundos = ((Date.now() - ingresoTs.current) / 1000).toFixed(1)
-    console.log(
-      `[v0] ${usuario.nombre}: primer toque en una alerta a los ${segundos} s desde el ingreso`,
-    )
-  }, [usuario])
-
   const darFeedback = useCallback((id: string, feedback: Exclude<Feedback, null>) => {
-    setAlertas((prev) => prev.map((a) => (a.id === id ? { ...a, feedback } : a)))
-    console.log(`[v0] Feedback "${feedback}" en alerta ${id}`)
+    setAlertas((prev) => giveFeedback(prev, id, feedback))
   }, [])
 
   const marcarAtendida = useCallback((id: string) => {
-    setAlertas((prev) => prev.map((a) => (a.id === id ? { ...a, estado: "atendida" } : a)))
-    console.log(`[v0] Alerta ${id} marcada como atendida`)
+    setAlertas((prev) => attendAlert(prev, id))
   }, [])
 
   const simularCambioTurno = useCallback(() => {
-    setAlertas((prev) => {
-      const existentes = new Set(prev.map((a) => a.id))
-      const entrantes = ALERTAS_NUEVO_TURNO.filter((a) => !existentes.has(a.id)).map((a) => ({
-        ...a,
-        timestamp: Date.now(),
-      }))
-      if (entrantes.length > 0) {
-        setCambios(ordenarAlertas(entrantes))
-        setMostrarUltimaVisita(true)
-      }
-      return ordenarAlertas([...prev, ...entrantes])
-    })
-    console.log("[v0] Simulación: cambio de turno (alertas agregadas y reordenadas)")
-  }, [])
+    const { alerts, added } = mergeShiftAlerts(alertas, ALERTAS_NUEVO_TURNO, Date.now())
+    if (added.length > 0) {
+      setCambios(added)
+      setMostrarUltimaVisita(true)
+    }
+    setAlertas(alerts)
+  }, [alertas])
 
   const value: AppState = {
     usuario,
@@ -130,7 +91,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     ingresar,
     salir,
     cerrarUltimaVisita,
-    registrarPrimerToque,
     darFeedback,
     marcarAtendida,
     simularCambioTurno,
