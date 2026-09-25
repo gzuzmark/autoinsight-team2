@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useRef } from "react"
 import { ArrowLeft, Check, Clock, MapPin, X } from "lucide-react"
 import { haceCuanto, type Alerta } from "@/lib/mock-data"
 import { ESTILOS } from "@/lib/status"
@@ -9,6 +10,19 @@ export function AlertDetail({ alerta, onCerrar }: { alerta: Alerta; onCerrar: ()
   const { marcarAtendida, marcarNoAplica } = useApp()
   const e = ESTILOS[alerta.severidad]
   const Icono = e.Icono
+  const headingRef = useRef<HTMLHeadingElement>(null)
+
+  useEffect(() => {
+    headingRef.current?.focus()
+  }, [])
+
+  useEffect(() => {
+    function onKeyDown(ev: KeyboardEvent) {
+      if (ev.key === "Escape") onCerrar()
+    }
+    document.addEventListener("keydown", onKeyDown)
+    return () => document.removeEventListener("keydown", onKeyDown)
+  }, [onCerrar])
 
   function atender() {
     marcarAtendida(alerta.id)
@@ -21,12 +35,24 @@ export function AlertDetail({ alerta, onCerrar }: { alerta: Alerta; onCerrar: ()
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-white">
+    <div
+      className="fixed inset-0 z-50 flex flex-col bg-white"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="alert-detail-heading"
+    >
       <div className={`flex items-center gap-5 border-b-4 p-6 ${e.fondo} ${e.borde} ${e.textoSobreFondo}`}>
         <Icono className="h-20 w-20 shrink-0" strokeWidth={2.5} aria-hidden />
         <div className="min-w-0 flex-1">
           <p className="text-[48px] font-black uppercase leading-none">{e.palabra}</p>
-          <p className="mt-2 text-[34px] font-bold leading-tight">{alerta.titulo}</p>
+          <h2
+            id="alert-detail-heading"
+            ref={headingRef}
+            tabIndex={-1}
+            className="mt-2 text-[34px] font-bold leading-tight outline-none"
+          >
+            {alerta.titulo}
+          </h2>
         </div>
         <button
           type="button"

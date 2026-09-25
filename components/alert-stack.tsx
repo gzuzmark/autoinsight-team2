@@ -16,7 +16,7 @@ export function AlertStack({
   nuevasIds,
 }: {
   alertas: Alerta[]
-  onAbrir: (a: Alerta) => void
+  onAbrir: (a: Alerta, el: HTMLButtonElement) => void
   nuevasIds: Set<string>
 }) {
   const visibles = alertas.slice(0, 3)
@@ -54,14 +54,14 @@ function AlertCard({
   alerta: Alerta
   destacada: boolean
   nueva: boolean
-  onAbrir: (a: Alerta) => void
+  onAbrir: (a: Alerta, el: HTMLButtonElement) => void
 }) {
   const e = ESTILOS[alerta.severidad]
   const Icono = e.Icono
   return (
     <button
       type="button"
-      onClick={() => onAbrir(alerta)}
+      onClick={(ev) => onAbrir(alerta, ev.currentTarget)}
       className={`relative flex w-full min-h-0 items-center gap-5 overflow-hidden rounded-2xl border-4 px-6 text-left ${e.fondo} ${e.borde} ${e.textoSobreFondo} ${
         destacada ? "flex-[5] py-4" : "flex-[3] py-3"
       }`}

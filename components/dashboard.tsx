@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { LogOut } from "lucide-react"
 import { formatearHora, PLANTA_NOMBRE, type Alerta, type Usuario } from "@/lib/mock-data"
 import { useApp } from "./app-provider"
@@ -14,6 +14,7 @@ export function Dashboard({ usuario }: { usuario: Usuario }) {
     useApp()
   const [abierta, setAbierta] = useState<Alerta | null>(null)
   const [montado, setMontado] = useState(false)
+  const disparadorRef = useRef<HTMLButtonElement | null>(null)
 
   // La hora se formatea solo del lado del cliente: `ultimaActualizacion` solo
   // cambia por interacciones (ingresar / simular turno), nunca en el render
@@ -25,8 +26,14 @@ export function Dashboard({ usuario }: { usuario: Usuario }) {
 
   const nuevasIds = new Set(cambiosDesdeUltimaVisita.map((a) => a.id))
 
-  function abrir(a: Alerta) {
+  function abrir(a: Alerta, el: HTMLButtonElement) {
+    disparadorRef.current = el
     setAbierta(a)
+  }
+
+  function cerrarDetalle() {
+    setAbierta(null)
+    disparadorRef.current?.focus()
   }
 
   return (
@@ -76,7 +83,7 @@ export function Dashboard({ usuario }: { usuario: Usuario }) {
 
       <AlertStack alertas={alertasActivas} onAbrir={abrir} nuevasIds={nuevasIds} />
 
-      {abierta && <AlertDetail alerta={abierta} onCerrar={() => setAbierta(null)} />}
+      {abierta && <AlertDetail alerta={abierta} onCerrar={cerrarDetalle} />}
     </div>
   )
 }

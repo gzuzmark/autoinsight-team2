@@ -160,4 +160,10 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Contorno de foco de alto contraste para uso con teclado/lector en el
+     piso de planta; visible sobre cualquier fondo del sistema de estados. */
+  :focus-visible {
+    outline: 4px solid #1d4ed8;
+    outline-offset: 2px;
+  }
 }
