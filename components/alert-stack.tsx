@@ -1,6 +1,6 @@
 "use client"
 
-import { Clock, MapPin, ThumbsDown, ThumbsUp } from "lucide-react"
+import { Clock, MapPin } from "lucide-react"
 import { haceCuanto, type Alerta } from "@/lib/mock-data"
 import { ESTILOS } from "@/lib/status"
 
@@ -84,19 +84,6 @@ function AlertCard({
           </span>
         </div>
       </div>
-      {alerta.feedback && (
-        <span
-          className="flex shrink-0 items-center gap-2 rounded-xl bg-black/25 px-4 py-2 text-[20px] font-black"
-          aria-label={alerta.feedback === "util" ? "Marcada como útil" : "Marcada como no útil"}
-        >
-          {alerta.feedback === "util" ? (
-            <ThumbsUp className="h-7 w-7" strokeWidth={2.5} aria-hidden />
-          ) : (
-            <ThumbsDown className="h-7 w-7" strokeWidth={2.5} aria-hidden />
-          )}
-          {alerta.feedback === "util" ? "Útil" : "No útil"}
-        </span>
-      )}
     </button>
   )
 }

@@ -1,13 +1,12 @@
 "use client"
 
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react"
-import { activeAlerts, attendAlert, changesSinceLastVisit, giveFeedback, mergeShiftAlerts } from "@/lib/domain/alerts"
+import { activeAlerts, attendAlert, changesSinceLastVisit, dismissAlert, mergeShiftAlerts } from "@/lib/domain/alerts"
 import {
   ALERTAS_INICIALES,
   ALERTAS_NUEVO_TURNO,
   ordenarAlertas,
   type Alerta,
-  type Feedback,
   type Usuario,
 } from "@/lib/mock-data"
 
@@ -20,8 +19,8 @@ type AppState = {
   ingresar: (usuario: Usuario) => void
   salir: () => void
   cerrarUltimaVisita: () => void
-  darFeedback: (id: string, feedback: Exclude<Feedback, null>) => void
   marcarAtendida: (id: string) => void
+  marcarNoAplica: (id: string) => void
   simularCambioTurno: () => void
 }
 
@@ -65,12 +64,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setMostrarUltimaVisita(false)
   }, [])
 
-  const darFeedback = useCallback((id: string, feedback: Exclude<Feedback, null>) => {
-    setAlertas((prev) => giveFeedback(prev, id, feedback))
-  }, [])
-
   const marcarAtendida = useCallback((id: string) => {
     setAlertas((prev) => attendAlert(prev, id))
+  }, [])
+
+  const marcarNoAplica = useCallback((id: string) => {
+    setAlertas((prev) => dismissAlert(prev, id))
   }, [])
 
   const simularCambioTurno = useCallback(() => {
@@ -91,8 +90,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     ingresar,
     salir,
     cerrarUltimaVisita,
-    darFeedback,
     marcarAtendida,
+    marcarNoAplica,
     simularCambioTurno,
   }
 

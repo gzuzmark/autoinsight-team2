@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest"
-import type { Alerta } from "@/lib/mock-data"
+import { ordenarAlertas, type Alerta } from "@/lib/mock-data"
 import {
   activeAlerts,
   attendAlert,
   changesSinceLastVisit,
-  giveFeedback,
+  dismissAlert,
   mergeShiftAlerts,
   sortAlerts,
 } from "./alerts"
@@ -17,7 +17,6 @@ function makeAlert(overrides: Partial<Alerta>): Alerta {
     estacion: "estacion",
     timestamp: 0,
     estado: "nueva",
-    feedback: null,
     ...overrides,
   }
 }
@@ -96,6 +95,12 @@ describe("activeAlerts", () => {
 
     expect(activeAlerts(input)).toEqual([])
   })
+
+  it("excludes alerts with estado 'no_aplica'", () => {
+    const input = deepFreeze([makeAlert({ id: "na", estado: "no_aplica" })])
+
+    expect(activeAlerts(input)).toEqual([])
+  })
 })
 
 describe("attendAlert", () => {
@@ -136,49 +141,41 @@ describe("attendAlert", () => {
   })
 })
 
-describe("giveFeedback", () => {
-  it("sets feedback on the matching id, independent of estado (works on attended alerts too)", () => {
-    const target = makeAlert({ id: "target", estado: "atendida", feedback: null })
-    const input = deepFreeze([target])
+describe("dismissAlert", () => {
+  it("sets estado to 'no_aplica' for the matching id", () => {
+    const target = makeAlert({ id: "target", estado: "nueva" })
+    const other = makeAlert({ id: "other", estado: "nueva" })
+    const input = deepFreeze([target, other])
 
-    const result = giveFeedback(input, "target", "util")
+    const result = dismissAlert(input, "target")
 
-    expect(result[0].feedback).toBe("util")
-    expect(result[0].estado).toBe("atendida")
+    expect(result.find((a) => a.id === "target")?.estado).toBe("no_aplica")
+    expect(result.find((a) => a.id === "other")?.estado).toBe("nueva")
   })
 
   it("does not mutate the input array or its elements", () => {
-    const target = deepFreeze(makeAlert({ id: "target", feedback: null }))
+    const target = deepFreeze(makeAlert({ id: "target", estado: "nueva" }))
     const input = deepFreeze([target])
 
-    giveFeedback(input, "target", "util")
+    dismissAlert(input, "target")
 
-    expect(input[0].feedback).toBeNull()
+    expect(input[0].estado).toBe("nueva")
   })
 
   it("returns the SAME array reference for an unknown id (no-op)", () => {
-    const input = deepFreeze([makeAlert({ id: "known", feedback: null })])
+    const input = deepFreeze([makeAlert({ id: "known", estado: "nueva" })])
 
-    const result = giveFeedback(input, "unknown", "util")
-
-    expect(result).toBe(input)
-  })
-
-  it("returns the SAME array reference when the feedback value is unchanged (no-op)", () => {
-    const input = deepFreeze([makeAlert({ id: "target", feedback: "util" })])
-
-    const result = giveFeedback(input, "target", "util")
+    const result = dismissAlert(input, "unknown")
 
     expect(result).toBe(input)
   })
 
-  it("allows switching feedback from util to no_util", () => {
-    const input = deepFreeze([makeAlert({ id: "target", feedback: "util" })])
+  it("returns the SAME array reference when the alert is already 'no_aplica' (no-op)", () => {
+    const input = deepFreeze([makeAlert({ id: "target", estado: "no_aplica" })])
 
-    const result = giveFeedback(input, "target", "no_util")
+    const result = dismissAlert(input, "target")
 
-    expect(result[0].feedback).toBe("no_util")
-    expect(result).not.toBe(input)
+    expect(result).toBe(input)
   })
 })
 
@@ -273,5 +270,30 @@ describe("mergeShiftAlerts", () => {
 
     expect(input[0].timestamp).toBe(1)
     expect(incomingArr[0].timestamp).toBe(999)
+  })
+
+  it("dedupes ids repeated inside 'incoming' itself, keeping the first occurrence", () => {
+    const first = makeAlert({ id: "dup", severidad: "parar", titulo: "primero", timestamp: 1 })
+    const second = makeAlert({ id: "dup", severidad: "ok", titulo: "segundo", timestamp: 2 })
+    const input = deepFreeze([] as Alerta[])
+
+    const { alerts, added } = mergeShiftAlerts(input, [first, second], 500)
+
+    expect(alerts).toHaveLength(1)
+    expect(alerts[0].titulo).toBe("primero")
+    expect(alerts[0].timestamp).toBe(500)
+    expect(added).toHaveLength(1)
+    expect(added[0].titulo).toBe("primero")
+  })
+})
+
+describe("ordenarAlertas (re-export)", () => {
+  it("orders alerts the same way sortAlerts does", () => {
+    const parar = makeAlert({ id: "p", severidad: "parar", timestamp: 100 })
+    const atencion = makeAlert({ id: "a", severidad: "atencion", timestamp: 100 })
+    const ok = makeAlert({ id: "o", severidad: "ok", timestamp: 100 })
+    const input = deepFreeze([ok, atencion, parar])
+
+    expect(ordenarAlertas(input)).toEqual(sortAlerts(input))
   })
 })

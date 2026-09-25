@@ -1,6 +1,5 @@
 export type Severidad = "parar" | "atencion" | "ok"
-export type EstadoAlerta = "nueva" | "atendida"
-export type Feedback = "util" | "no_util" | null
+export type EstadoAlerta = "nueva" | "atendida" | "no_aplica"
 
 export type Usuario = {
   id: string
@@ -25,7 +24,6 @@ export type Alerta = {
   estacion: string
   timestamp: number
   estado: EstadoAlerta
-  feedback: Feedback
 }
 
 const AHORA = Date.now()
@@ -54,7 +52,6 @@ export const ALERTAS_INICIALES: Alerta[] = [
     estacion: "Estación 4 · Ensamble",
     timestamp: min(2),
     estado: "nueva",
-    feedback: null,
   },
   {
     id: "a2",
@@ -63,7 +60,6 @@ export const ALERTAS_INICIALES: Alerta[] = [
     estacion: "Estación 7 · Atornillado",
     timestamp: min(6),
     estado: "nueva",
-    feedback: null,
   },
   {
     id: "a3",
@@ -72,7 +68,6 @@ export const ALERTAS_INICIALES: Alerta[] = [
     estacion: "Estación 2 · Soldadura",
     timestamp: min(11),
     estado: "nueva",
-    feedback: null,
   },
   {
     id: "a4",
@@ -81,7 +76,6 @@ export const ALERTAS_INICIALES: Alerta[] = [
     estacion: "Estación 5 · Curado",
     timestamp: min(18),
     estado: "nueva",
-    feedback: null,
   },
   {
     id: "a5",
@@ -90,7 +84,6 @@ export const ALERTAS_INICIALES: Alerta[] = [
     estacion: "Estación 3 · Inspección",
     timestamp: min(24),
     estado: "nueva",
-    feedback: null,
   },
   {
     id: "a6",
@@ -99,7 +92,6 @@ export const ALERTAS_INICIALES: Alerta[] = [
     estacion: "Estación 1 · Recepción",
     timestamp: min(40),
     estado: "nueva",
-    feedback: null,
   },
   {
     id: "a7",
@@ -108,7 +100,6 @@ export const ALERTAS_INICIALES: Alerta[] = [
     estacion: "Línea completa",
     timestamp: min(55),
     estado: "nueva",
-    feedback: null,
   },
 ]
 
@@ -121,7 +112,6 @@ export const ALERTAS_NUEVO_TURNO: Alerta[] = [
     estacion: "Estación 6 · Neumática",
     timestamp: min(0),
     estado: "nueva",
-    feedback: null,
   },
   {
     id: "n2",
@@ -130,7 +120,6 @@ export const ALERTAS_NUEVO_TURNO: Alerta[] = [
     estacion: "Estación 5 · Curado",
     timestamp: min(1),
     estado: "nueva",
-    feedback: null,
   },
 ]
 

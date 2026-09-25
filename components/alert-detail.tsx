@@ -1,22 +1,22 @@
 "use client"
 
-import { ArrowLeft, Check, Clock, MapPin, ThumbsDown, ThumbsUp } from "lucide-react"
+import { ArrowLeft, Check, Clock, MapPin, X } from "lucide-react"
 import { haceCuanto, type Alerta } from "@/lib/mock-data"
 import { ESTILOS } from "@/lib/status"
 import { useApp } from "./app-provider"
 
 export function AlertDetail({ alerta, onCerrar }: { alerta: Alerta; onCerrar: () => void }) {
-  const { darFeedback, marcarAtendida } = useApp()
+  const { marcarAtendida, marcarNoAplica } = useApp()
   const e = ESTILOS[alerta.severidad]
   const Icono = e.Icono
 
-  function feedback(valor: "util" | "no_util") {
-    darFeedback(alerta.id, valor)
+  function atender() {
+    marcarAtendida(alerta.id)
     onCerrar()
   }
 
-  function atender() {
-    marcarAtendida(alerta.id)
+  function noAplica() {
+    marcarNoAplica(alerta.id)
     onCerrar()
   }
 
@@ -55,30 +55,22 @@ export function AlertDetail({ alerta, onCerrar }: { alerta: Alerta; onCerrar: ()
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 border-t-4 border-neutral-200 p-6">
-        <button
-          type="button"
-          onClick={() => feedback("util")}
-          className="flex h-28 items-center justify-center gap-4 rounded-2xl border-4 border-[#053d20] bg-[#0b5d33] text-[32px] font-black text-white transition-transform active:scale-[0.98]"
-        >
-          <ThumbsUp className="h-12 w-12" strokeWidth={2.5} aria-hidden />
-          Útil
-        </button>
-        <button
-          type="button"
-          onClick={() => feedback("no_util")}
-          className="flex h-28 items-center justify-center gap-4 rounded-2xl border-4 border-[#8a6400] bg-[#f5b301] text-[32px] font-black text-[#1a1400] transition-transform active:scale-[0.98]"
-        >
-          <ThumbsDown className="h-12 w-12" strokeWidth={2.5} aria-hidden />
-          No útil
-        </button>
+      <div className="grid grid-cols-2 gap-4 border-t-4 border-neutral-200 p-6">
         <button
           type="button"
           onClick={atender}
-          className="flex h-28 items-center justify-center gap-4 rounded-2xl border-4 border-neutral-900 bg-neutral-900 text-[32px] font-black text-white transition-transform active:scale-[0.98]"
+          className="flex h-28 items-center justify-center gap-4 rounded-2xl border-4 border-neutral-900 bg-neutral-900 text-[32px] font-black text-white"
         >
           <Check className="h-12 w-12" strokeWidth={2.5} aria-hidden />
           Atendida
+        </button>
+        <button
+          type="button"
+          onClick={noAplica}
+          className="flex h-28 items-center justify-center gap-4 rounded-2xl border-4 border-neutral-400 bg-white text-[32px] font-black text-neutral-900"
+        >
+          <X className="h-12 w-12" strokeWidth={2.5} aria-hidden />
+          No aplica
         </button>
       </div>
     </div>

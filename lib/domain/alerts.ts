@@ -1,4 +1,4 @@
-import type { Alerta, Feedback, Severidad } from "@/lib/mock-data"
+import type { Alerta, Severidad } from "@/lib/mock-data"
 
 const SEVERITY_RANK: Record<Severidad, number> = { parar: 0, atencion: 1, ok: 2 }
 
@@ -33,19 +33,15 @@ export function attendAlert(alerts: readonly Alerta[], id: string): Alerta[] {
 }
 
 /**
- * Sets feedback on the alert matching `id`. Feedback is non-terminal and
- * independent of `estado` (works on attended alerts too).
- * No-op contract: if `id` is unknown or the feedback value is unchanged, the
- * SAME array reference is returned. Does not mutate the input.
+ * Sets estado to "no_aplica" on the alert matching `id`.
+ * No-op contract: if `id` is unknown or the alert is already "no_aplica", the
+ * SAME array reference is returned (no new array, no new objects) so callers
+ * can skip re-rendering. Does not mutate the input.
  */
-export function giveFeedback(
-  alerts: readonly Alerta[],
-  id: string,
-  feedback: Exclude<Feedback, null>,
-): Alerta[] {
+export function dismissAlert(alerts: readonly Alerta[], id: string): Alerta[] {
   const target = alerts.find((a) => a.id === id)
-  if (!target || target.feedback === feedback) return alerts as Alerta[]
-  return alerts.map((a) => (a.id === id ? { ...a, feedback } : a))
+  if (!target || target.estado === "no_aplica") return alerts as Alerta[]
+  return alerts.map((a) => (a.id === id ? { ...a, estado: "no_aplica" } : a))
 }
 
 /**
@@ -68,9 +64,10 @@ export type MergeShiftAlertsResult = {
 }
 
 /**
- * Merges `incoming` shift alerts into `alerts`, deduping by id. Incoming
- * alerts whose id is not already present are stamped with `timestamp: now`
- * and included in `added`. The result is sorted (see sortAlerts).
+ * Merges `incoming` shift alerts into `alerts`, deduping by id against both
+ * `alerts` and duplicate ids within `incoming` itself (first occurrence
+ * wins). Alerts that pass dedup are stamped with `timestamp: now` and
+ * included in `added`. The result is sorted (see sortAlerts).
  * No-op contract: if nothing is added, `added` is [] and `alerts` is the
  * SAME input array reference. Does not mutate either input array.
  */
@@ -80,8 +77,13 @@ export function mergeShiftAlerts(
   now: number,
 ): MergeShiftAlertsResult {
   const existingIds = new Set(alerts.map((a) => a.id))
+  const seenIncomingIds = new Set<string>()
   const added = incoming
-    .filter((a) => !existingIds.has(a.id))
+    .filter((a) => {
+      if (existingIds.has(a.id) || seenIncomingIds.has(a.id)) return false
+      seenIncomingIds.add(a.id)
+      return true
+    })
     .map((a) => ({ ...a, timestamp: now }))
 
   if (added.length === 0) {
