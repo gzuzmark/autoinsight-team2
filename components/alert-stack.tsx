@@ -57,6 +57,7 @@ function TopAlertCard({
   return (
     <button
       type="button"
+      data-alert-id={alerta.id}
       onClick={(ev) => onAbrir(alerta, ev.currentTarget)}
       className={`relative flex min-h-35 flex-1 items-center gap-5 rounded-2xl border-4 px-6 py-4 text-left ${e.fondo} ${e.borde} ${e.textoSobreFondo}`}
     >
@@ -95,6 +96,7 @@ function SecondaryAlertCard({
   return (
     <button
       type="button"
+      data-alert-id={alerta.id}
       onClick={(ev) => onAbrir(alerta, ev.currentTarget)}
       className={`relative flex h-22 shrink-0 items-center gap-4 rounded-2xl border-4 px-5 text-left ${e.fondo} ${e.borde} ${e.textoSobreFondo}`}
     >

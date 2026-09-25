@@ -4,10 +4,21 @@ import { useEffect, useRef } from "react"
 import { ArrowLeft, Check, Clock, MapPin, X } from "lucide-react"
 import { haceCuanto, type Alerta } from "@/lib/mock-data"
 import { ESTILOS, SEVERIDAD_PALABRA } from "@/lib/status"
-import { useApp } from "./app-provider"
 
-export function AlertDetail({ alerta, onCerrar }: { alerta: Alerta; onCerrar: () => void }) {
-  const { marcarAtendida, marcarNoAplica } = useApp()
+export function AlertDetail({
+  alerta,
+  onAtender,
+  onNoAplica,
+  onCerrar,
+}: {
+  alerta: Alerta
+  /** Marks the alert atendida AND closes the panel (F3: caller decides where focus goes next, since the trigger card unmounts). */
+  onAtender: () => void
+  /** Marks the alert no_aplica AND closes the panel (see onAtender). */
+  onNoAplica: () => void
+  /** Plain close (Escape / "Volver"): the alert is untouched, so focus returns to the trigger that opened it. */
+  onCerrar: () => void
+}) {
   const e = ESTILOS[alerta.severidad]
   const Icono = e.Icono
   const headingRef = useRef<HTMLHeadingElement>(null)
@@ -23,16 +34,6 @@ export function AlertDetail({ alerta, onCerrar }: { alerta: Alerta; onCerrar: ()
     document.addEventListener("keydown", onKeyDown)
     return () => document.removeEventListener("keydown", onKeyDown)
   }, [onCerrar])
-
-  function atender() {
-    marcarAtendida(alerta.id)
-    onCerrar()
-  }
-
-  function noAplica() {
-    marcarNoAplica(alerta.id)
-    onCerrar()
-  }
 
   return (
     <div
@@ -84,7 +85,7 @@ export function AlertDetail({ alerta, onCerrar }: { alerta: Alerta; onCerrar: ()
       <div className="grid grid-cols-2 gap-4 border-t-4 border-neutral-200 p-6">
         <button
           type="button"
-          onClick={atender}
+          onClick={onAtender}
           className="flex h-28 items-center justify-center gap-4 rounded-2xl border-4 border-neutral-900 bg-neutral-900 text-3xl font-black text-white"
         >
           <Check className="h-12 w-12" strokeWidth={2.5} aria-hidden />
@@ -92,7 +93,7 @@ export function AlertDetail({ alerta, onCerrar }: { alerta: Alerta; onCerrar: ()
         </button>
         <button
           type="button"
-          onClick={noAplica}
+          onClick={onNoAplica}
           className="flex h-28 items-center justify-center gap-4 rounded-2xl border-4 border-neutral-400 bg-white text-3xl font-black text-neutral-900"
         >
           <X className="h-12 w-12" strokeWidth={2.5} aria-hidden />
