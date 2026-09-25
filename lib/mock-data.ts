@@ -138,12 +138,11 @@ export function haceCuanto(timestamp: number): string {
   return `hace ${horas} h`
 }
 
-/** Formats a timestamp as 24h HH:MM, es-AR style (e.g. "14:05"). */
+/** Formats a timestamp as 24h HH:MM (e.g. "14:05") in the device's local time zone. */
 export function formatearHora(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString("es-AR", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
-    timeZone: "America/Argentina/Buenos_Aires",
   })
 }

@@ -25,7 +25,7 @@ describe("SinceLastVisit", () => {
   })
 
   it('shows "Sin cambios" with the last logout time when nothing changed', () => {
-    const ts = new Date("2026-09-25T14:05:00-03:00").getTime()
+    const ts = new Date(2026, 8, 25, 14, 5).getTime()
 
     const html = renderToStaticMarkup(
       <SinceLastVisit primeraVisita={false} cambios={[]} ultimoLogoutTs={ts} />,
