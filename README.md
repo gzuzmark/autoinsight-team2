@@ -44,6 +44,53 @@ alert detail, dashboard (second visit / since-last-visit strip) and dashboard
 after the `?demo=1` shift simulation, and fails on document scroll, text
 under 24px, touch targets under 88px, clipped content, or console errors.
 
+## Supabase (local)
+
+The backend schema lives under `supabase/` (Supabase CLI, Docker). This is a
+clean rewrite (D15) of the app's Postgres schema, not derived from the
+legacy remote schema: Spanish identifiers matching the app's own contracts
+(D16), RLS enabled on every table with no anon/authenticated policies, and
+every RPC restricted to `service_role` (D17). The app itself is not wired to
+Supabase yet — the client data layer (T7-T9) is a separate, later change.
+
+```bash
+supabase start                          # first run downloads Docker images
+supabase db reset                       # (re)applies migrations + seed.sql
+supabase test db                        # runs the pgTAP suite in supabase/tests/
+supabase gen types typescript --local > lib/supabase/database.types.ts
+supabase stop                           # keeps the data volume; add --no-backup to also drop it
+```
+
+All of the above run against the **local** stack only (`--local`/no flags);
+none of them touch the remote project. `supabase status` prints the local API
+URL, DB connection string, and anon/service_role keys (well-known local
+defaults, safe to keep out of committed files but not sensitive to print).
+
+Seed data (`supabase/seed.sql`, loaded automatically by `db reset`): one
+plant ("Planta Norte"), 3 lines, stations, the 6 mock users from
+`lib/mock-data.ts` (PINs hashed with bcrypt at seed time), per-line KPIs,
+and Línea 3's starting alerts matching `ALERTAS_INICIALES`.
+
+To generate demo traffic by hand (no cron needed):
+
+```sql
+select public.demo_generar_alertas(null, 1); -- as service_role, e.g. via `supabase db psql`
+select public.demo_autoresolver('30 minutes');
+```
+
+An **opt-in** cron job that calls those same two functions on a schedule is
+in `supabase/snippets/cron_demo.sql` (not a migration — see the comment at
+its top for why). Run it manually against the local DB, or paste it into
+Dashboard → Integrations → Cron on a remote project after the B8 cutover.
+
+Access model (D17): the browser never talks to Supabase directly. Next.js
+route handlers (server-side) use the `service_role` (secret) key; `anon` and
+`authenticated` have zero table privileges and zero `EXECUTE` on any RPC.
+
+Cutover to the remote project (`urxhacdnqgllscijffmh`) — applying these
+migrations there, seeding it, and enabling cron — is a separate, explicitly
+authorized step (B8), not part of local development.
+
 ## Design decisions for the plant floor
 
 This UI was ported from an office-style quality dashboard to run on a tablet

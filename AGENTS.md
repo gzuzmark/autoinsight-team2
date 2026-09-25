@@ -36,6 +36,13 @@ corepack pnpm test:ui                         # BASE_URL defaults to :3100
 git diff --check                              # whitespace/conflict markers
 ```
 
+When a change touches `supabase/**`, also run (local Docker stack only,
+never the remote project — see the README "Supabase (local)" section):
+
+```bash
+supabase db reset && supabase test db
+```
+
 `test:run` includes `lib/design-rules.test.ts`, a static guard that scans
 `components/**` and `app/**` (excluding `components/ui/**` and `*.test.*`)
 for forbidden patterns and checks the status palette's contrast/luminance
