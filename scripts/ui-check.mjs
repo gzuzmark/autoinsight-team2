@@ -28,7 +28,17 @@ async function main() {
     process.exit(1)
   }
 
+  // F5: the browser is always closed, even if a scenario throws (a stray
+  // Chrome process left running is worse than a failed check).
   const browser = await chromium.launch({ channel: "chrome" })
+  try {
+    await runScenarios(browser)
+  } finally {
+    await browser.close()
+  }
+}
+
+async function runScenarios(browser) {
   const page = await browser.newPage({ viewport: VIEWPORT })
 
   const consoleErrors = []
@@ -142,41 +152,67 @@ async function main() {
     console.log(`${name}: ${result.length === 0 ? "OK" : `${result.length} violation(s)`}`)
   }
 
+  // F5: wait on the observable screen that is actually about to be checked,
+  // instead of a fixed sleep — every wait below is tied to something the
+  // rendered DOM shows once the previous interaction has taken effect.
+
+  async function irAvatares() {
+    await page.getByRole("button", { name: /Ana Ríos/ }).waitFor({ state: "visible" })
+  }
+
+  async function irPin() {
+    await page.getByText("Ingresa tu PIN").waitFor({ state: "visible" })
+  }
+
+  async function irTablero() {
+    await page.getByRole("button", { name: "Salir" }).waitFor({ state: "visible" })
+  }
+
+  async function ingresarComoAna() {
+    await page.getByRole("button", { name: /Ana Ríos/ }).click()
+    await irPin()
+    for (const d of "1234") await page.getByRole("button", { name: d, exact: true }).click()
+    await irTablero()
+  }
+
   await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle" })
+  await irAvatares()
   await check("login")
 
   await page.getByRole("button", { name: /Ana Ríos/ }).click()
-  await page.waitForTimeout(200)
+  await irPin()
   await check("pin")
 
   for (const d of "1234") await page.getByRole("button", { name: d, exact: true }).click()
-  await page.waitForTimeout(300)
+  await irTablero()
   await check("dashboard (first visit)")
 
   await page.locator("main button").filter({ hasText: "FPY por debajo del 90" }).first().click()
-  await page.waitForTimeout(200)
+  await page.getByRole("dialog").waitFor({ state: "visible" })
   await check("detail")
 
   await page.keyboard.press("Escape")
-  await page.waitForTimeout(150)
+  await page.getByRole("dialog").waitFor({ state: "hidden" })
   await page.getByRole("button", { name: "Salir" }).click()
-  await page.waitForTimeout(200)
-  await page.getByRole("button", { name: /Ana Ríos/ }).click()
-  await page.waitForTimeout(200)
-  for (const d of "1234") await page.getByRole("button", { name: d, exact: true }).click()
-  await page.waitForTimeout(300)
+  await irAvatares()
+  await ingresarComoAna()
   await check("dashboard (second visit, strip)")
 
-  await page.goto(`${BASE_URL}/?demo=1`, { waitUntil: "networkidle" })
-  await page.getByRole("button", { name: /Ana Ríos/ }).click()
-  await page.waitForTimeout(200)
-  for (const d of "1234") await page.getByRole("button", { name: d, exact: true }).click()
-  await page.waitForTimeout(300)
-  await page.getByRole("button", { name: /Simular turno/ }).click()
-  await page.waitForTimeout(300)
-  await check("dashboard (after shift simulation)")
+  // F5 addition: resolve an alert (Atendida) and check the stack/strip right
+  // after — cheap regression coverage for F1 (strip stays in sync) and F3
+  // (focus lands somewhere sane, dialog closes) on a real page.
+  await page.locator("main button[data-alert-id]").first().click()
+  await page.getByRole("dialog").waitFor({ state: "visible" })
+  await page.getByRole("button", { name: "Atendida" }).click()
+  await page.getByRole("dialog").waitFor({ state: "hidden" })
+  await check("dashboard (after resolving an alert)")
 
-  await browser.close()
+  await page.goto(`${BASE_URL}/?demo=1`, { waitUntil: "networkidle" })
+  await irAvatares()
+  await ingresarComoAna()
+  await page.getByRole("button", { name: /Simular turno/ }).click()
+  await page.getByText("Paro de línea por fuga de aire").first().waitFor({ state: "visible" })
+  await check("dashboard (after shift simulation)")
 
   if (consoleErrors.length > 0) {
     allViolations.push("\n== console errors ==")
