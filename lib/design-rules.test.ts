@@ -9,8 +9,31 @@ import { ESTILOS } from "./status"
 
 const ROOT = path.resolve(__dirname, "..")
 
+/**
+ * Normalizes a hex color to 6-digit lowercase form, expanding the 3-digit
+ * shorthand (#rgb -> #rrggbb). Throws a clear error for anything else (wrong
+ * length, non-hex characters, missing "#") instead of letting the luminance
+ * computation below silently misread a malformed palette entry (F6).
+ */
+function normalizeHex(hex: string): string {
+  const m = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.exec(hex)
+  if (!m) {
+    throw new Error(`Invalid hex color "${hex}": expected #rgb or #rrggbb.`)
+  }
+  const digits = m[1]
+  const expanded =
+    digits.length === 3
+      ? digits
+          .split("")
+          .map((d) => d + d)
+          .join("")
+      : digits
+  return `#${expanded.toLowerCase()}`
+}
+
 function relativeLuminance(hex: string): number {
-  const c = hex.replace("#", "").match(/\w\w/g)!.map((x) => parseInt(x, 16) / 255)
+  const normalized = normalizeHex(hex)
+  const c = normalized.replace("#", "").match(/\w\w/g)!.map((x) => parseInt(x, 16) / 255)
   const [r, g, b] = c.map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)))
   return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }
@@ -119,6 +142,37 @@ describe("Source scan: forbidden floor-rule violations (components/**, app/**, e
 function readAll(files: string[]): string {
   return files.map((f) => fs.readFileSync(path.join(ROOT, f), "utf-8")).join("\n")
 }
+
+describe("Guard sanity: the scanned file list is never empty (F6, fail closed)", () => {
+  it("finds at least one source file under components/ and app/", () => {
+    // A guard that silently scans zero files (e.g. a broken path, a renamed
+    // directory) passes trivially and stops protecting anything. Fail
+    // closed instead: an empty scan is itself a test failure.
+    expect(SCANNED_FILES.length).toBeGreaterThan(0)
+  })
+})
+
+describe("normalizeHex (F6)", () => {
+  it("expands the 3-digit #rgb shorthand to 6-digit lowercase", () => {
+    expect(normalizeHex("#0f0")).toBe("#00ff00")
+  })
+
+  it("lowercases an already 6-digit hex color", () => {
+    expect(normalizeHex("#FF0000")).toBe("#ff0000")
+  })
+
+  it("rejects a hex string with the wrong number of digits", () => {
+    expect(() => normalizeHex("#1234")).toThrow(/invalid hex color/i)
+  })
+
+  it("rejects a string with non-hex characters", () => {
+    expect(() => normalizeHex("#zzzzzz")).toThrow(/invalid hex color/i)
+  })
+
+  it("rejects a string missing the leading #", () => {
+    expect(() => normalizeHex("ff0000")).toThrow(/invalid hex color/i)
+  })
+})
 
 describe("Exact UI strings (D7, D8)", () => {
   const stack = readAll(listSourceFiles("components").filter((f) => f.includes("alert-stack")))
