@@ -134,14 +134,9 @@ export const ALERTAS_NUEVO_TURNO: Alerta[] = [
   },
 ]
 
-const ORDEN: Record<Severidad, number> = { parar: 0, atencion: 1, ok: 2 }
-
-export function ordenarAlertas(alertas: Alerta[]): Alerta[] {
-  return [...alertas].sort((a, b) => {
-    if (ORDEN[a.severidad] !== ORDEN[b.severidad]) return ORDEN[a.severidad] - ORDEN[b.severidad]
-    return b.timestamp - a.timestamp
-  })
-}
+// Sorting now lives in lib/domain/alerts.ts (pure domain module); re-exported
+// here under the existing name so current imports keep working unchanged.
+export { sortAlerts as ordenarAlertas } from "./domain/alerts"
 
 export function haceCuanto(timestamp: number): string {
   const segundos = Math.max(0, Math.round((Date.now() - timestamp) / 1000))
