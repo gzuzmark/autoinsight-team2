@@ -8,8 +8,9 @@ import { IndicatorsRow } from "./indicators-row"
 import { AlertStack } from "./alert-stack"
 import { AlertDetail } from "./alert-detail"
 import { SinceLastVisit } from "./since-last-visit"
+import { DemoControls } from "./demo-controls"
 
-export function Dashboard({ usuario }: { usuario: Usuario }) {
+export function Dashboard({ usuario, demo }: { usuario: Usuario; demo: boolean }) {
   const { alertasActivas, salir, cambiosDesdeUltimaVisita, esPrimeraVisita, ultimoLogoutTs, ultimaActualizacion } =
     useApp()
   const [abierta, setAbierta] = useState<Alerta | null>(null)
@@ -55,13 +56,14 @@ export function Dashboard({ usuario }: { usuario: Usuario }) {
           <div className="flex items-center gap-3">
             <span
               aria-hidden
-              className="flex h-14 w-14 items-center justify-center rounded-full text-[22px] font-black text-white"
+              className="flex h-14 w-14 items-center justify-center rounded-full text-[24px] font-black text-white"
               style={{ backgroundColor: usuario.color }}
             >
               {usuario.iniciales}
             </span>
             <span className="text-[24px] font-bold text-neutral-900">{usuario.nombre}</span>
           </div>
+          {demo && <DemoControls />}
           <button
             type="button"
             onClick={salir}

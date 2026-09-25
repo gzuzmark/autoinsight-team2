@@ -51,7 +51,7 @@ export function PinPad({
           {usuario.iniciales}
         </span>
         <div>
-          <p className="text-[22px] font-semibold text-neutral-600">Ingresa tu PIN</p>
+          <p className="text-[24px] font-semibold text-neutral-600">Ingresa tu PIN</p>
           <p className="text-[28px] font-black text-neutral-900">{usuario.nombre}</p>
         </div>
       </div>
@@ -71,7 +71,7 @@ export function PinPad({
         ))}
       </div>
 
-      <p className="h-8 text-[22px] font-bold text-[#c1121f]" role="alert">
+      <p className="h-8 text-[24px] font-bold text-[#c1121f]" role="alert">
         {error ? "PIN incorrecto, intenta de nuevo" : ""}
       </p>
 

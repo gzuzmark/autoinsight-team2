@@ -6,7 +6,6 @@ import { AppProvider, useApp } from "@/components/app-provider"
 import { LoginAvatars } from "@/components/login-avatars"
 import { PinPad } from "@/components/pin-pad"
 import { Dashboard } from "@/components/dashboard"
-import { DemoControls } from "@/components/demo-controls"
 
 export default function Page() {
   return (
@@ -41,10 +40,7 @@ function Shell() {
           <LoginAvatars onSeleccionar={setSeleccionado} />
         )
       ) : (
-        <>
-          <Dashboard usuario={usuario} />
-          {demo && <DemoControls />}
-        </>
+        <Dashboard usuario={usuario} demo={demo} />
       )}
     </main>
   )

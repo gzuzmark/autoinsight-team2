@@ -9,7 +9,7 @@ export function LoginAvatars({ onSeleccionar }: { onSeleccionar: (u: Usuario) =>
         <h1 className="text-[40px] font-black tracking-tight text-neutral-900">
           Alertas de calidad
         </h1>
-        <p className="mt-2 text-[22px] font-semibold text-neutral-600">
+        <p className="mt-2 text-[24px] font-semibold text-neutral-600">
           Toca tu foto para ingresar
         </p>
       </div>
@@ -20,7 +20,7 @@ export function LoginAvatars({ onSeleccionar }: { onSeleccionar: (u: Usuario) =>
             <button
               type="button"
               onClick={() => onSeleccionar(u)}
-              className="flex w-[280px] items-center gap-5 rounded-2xl border-4 border-neutral-300 bg-white p-5 text-left transition-colors active:border-neutral-900"
+              className="flex min-h-[96px] w-[280px] items-center gap-5 rounded-2xl border-4 border-neutral-300 bg-white p-5 text-left"
             >
               <span
                 aria-hidden
