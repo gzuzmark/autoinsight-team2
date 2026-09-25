@@ -112,11 +112,10 @@ declare
   v_fallidos int;
   v_sesion_id uuid;
 begin
-  select p.pin_hash, u.activo, il.bloqueado_hasta, coalesce(il.fallidos, 0)
-    into v_pin_hash, v_activo, v_bloqueado_hasta, v_fallidos
+  select p.pin_hash, u.activo
+    into v_pin_hash, v_activo
   from public.usuarios u
   left join public.usuarios_pin p on p.usuario_id = u.id
-  left join public.intentos_login il on il.usuario_id = u.id
   where u.id = p_usuario_id;
 
   -- Unknown user: behave exactly like a locked-out/wrong-PIN user (null),
@@ -125,33 +124,41 @@ begin
     return null;
   end if;
 
+  -- Serialize attempts per user: ensure the counter row exists, then lock it
+  -- so concurrent wrong-PIN calls cannot overwrite each other's increment.
+  insert into public.intentos_login (usuario_id, fallidos, bloqueado_hasta)
+  values (p_usuario_id, 0, null)
+  on conflict (usuario_id) do nothing;
+
+  select il.fallidos, il.bloqueado_hasta
+    into v_fallidos, v_bloqueado_hasta
+  from public.intentos_login il
+  where il.usuario_id = p_usuario_id
+  for update;
+
   if v_bloqueado_hasta is not null and v_bloqueado_hasta > now() then
     return null;
   end if;
 
-  if v_pin_hash <> extensions.crypt(p_pin, v_pin_hash) then
+  -- crypt() is STRICT: a null PIN yields null, so compare null-safely and
+  -- treat a null PIN as a failed attempt.
+  if p_pin is null or v_pin_hash is distinct from extensions.crypt(p_pin, v_pin_hash) then
     v_fallidos := v_fallidos + 1;
-    insert into public.intentos_login (usuario_id, fallidos, bloqueado_hasta)
-    values (
-      p_usuario_id,
-      v_fallidos,
-      case
-        when v_fallidos >= private.max_intentos_fallidos() then now() + private.duracion_bloqueo()
-        else null
-      end
-    )
-    on conflict (usuario_id) do update
-      set fallidos = excluded.fallidos,
-          bloqueado_hasta = excluded.bloqueado_hasta;
+    update public.intentos_login
+    set fallidos = v_fallidos,
+        bloqueado_hasta = case
+          when v_fallidos >= private.max_intentos_fallidos() then now() + private.duracion_bloqueo()
+          else null
+        end
+    where usuario_id = p_usuario_id;
     return null;
   end if;
 
   -- Success: reset the counter and open a session.
-  insert into public.intentos_login (usuario_id, fallidos, bloqueado_hasta)
-  values (p_usuario_id, 0, null)
-  on conflict (usuario_id) do update
-    set fallidos = 0,
-        bloqueado_hasta = null;
+  update public.intentos_login
+  set fallidos = 0,
+      bloqueado_hasta = null
+  where usuario_id = p_usuario_id;
 
   insert into public.sesiones (usuario_id)
   values (p_usuario_id)

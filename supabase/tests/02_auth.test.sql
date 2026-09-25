@@ -1,6 +1,6 @@
 -- Auth tests: iniciar_sesion success/failure/lockout/reset, session expiry.
 begin;
-select plan(23);
+select plan(25);
 
 insert into public.plantas (id, nombre) values ('11111111-1111-1111-1111-111111111111', 'Planta Test');
 insert into public.lineas (id, planta_id, nombre, turno)
@@ -13,6 +13,10 @@ insert into public.usuarios_pin (usuario_id, pin_hash)
 -- Wrong PIN fails and returns null, does not create a session --------------
 select is(public.iniciar_sesion('33333333-3333-3333-3333-333333333333', '0000'), null, 'wrong PIN returns null');
 select is((select fallidos from public.intentos_login where usuario_id = '33333333-3333-3333-3333-333333333333'), 1, 'one failed attempt is recorded');
+
+-- NULL PIN never authenticates and counts as a failure ------------------------
+select is(public.iniciar_sesion('33333333-3333-3333-3333-333333333333', null), null, 'null PIN returns null');
+select is((select fallidos from public.intentos_login where usuario_id = '33333333-3333-3333-3333-333333333333'), 2, 'a null PIN is recorded as a failed attempt');
 
 -- Unknown user fails the same way (no enumeration) --------------------------
 select is(public.iniciar_sesion('99999999-9999-9999-9999-999999999999', '1234'), null, 'unknown user returns null, same as a wrong PIN');
