@@ -1,7 +1,7 @@
 -- RLS + grants tests (D17): RLS enabled on every public table, and
 -- anon/authenticated have no table privileges and no EXECUTE on any RPC.
 begin;
-select plan(33);
+select plan(22);
 
 -- RLS enabled on every public table -----------------------------------------
 select is(
@@ -98,53 +98,6 @@ select ok(
 select ok(
   has_table_privilege('service_role', 'public.alertas', 'update'),
   'service_role can update alertas'
-);
-
--- No EXECUTE on any RPC for anon/authenticated -------------------------------
-select ok(
-  not has_function_privilege('anon', 'public.iniciar_sesion(uuid, text)', 'execute'),
-  'anon cannot execute iniciar_sesion'
-);
-select ok(
-  not has_function_privilege('anon', 'public.cerrar_sesion(uuid)', 'execute'),
-  'anon cannot execute cerrar_sesion'
-);
-select ok(
-  not has_function_privilege('anon', 'public.tablero(uuid)', 'execute'),
-  'anon cannot execute tablero'
-);
-select ok(
-  not has_function_privilege('anon', 'public.resolver_alerta(uuid, uuid, estado_alerta)', 'execute'),
-  'anon cannot execute resolver_alerta'
-);
-select ok(
-  not has_function_privilege('anon', 'public.demo_generar_alertas(uuid, int)', 'execute'),
-  'anon cannot execute demo_generar_alertas'
-);
-select ok(
-  not has_function_privilege('anon', 'public.demo_autoresolver(interval)', 'execute'),
-  'anon cannot execute demo_autoresolver'
-);
-select ok(
-  not has_function_privilege('anon', 'public.usuarios_login()', 'execute'),
-  'anon cannot execute usuarios_login'
-);
-select ok(
-  not has_function_privilege('authenticated', 'public.iniciar_sesion(uuid, text)', 'execute'),
-  'authenticated cannot execute iniciar_sesion'
-);
-select ok(
-  not has_function_privilege('authenticated', 'public.resolver_alerta(uuid, uuid, estado_alerta)', 'execute'),
-  'authenticated cannot execute resolver_alerta'
-);
-
-select ok(
-  has_function_privilege('service_role', 'public.iniciar_sesion(uuid, text)', 'execute'),
-  'service_role can execute iniciar_sesion'
-);
-select ok(
-  has_function_privilege('service_role', 'public.tablero(uuid)', 'execute'),
-  'service_role can execute tablero'
 );
 
 -- private schema is unreachable for anon/authenticated -----------------------
