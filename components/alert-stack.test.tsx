@@ -45,4 +45,38 @@ describe("AlertStack", () => {
 
     expect(html).not.toContain("menos grave")
   })
+
+  it('marks only alerts present in nuevasIds with the sr-only "Nueva" label', () => {
+    const alertas = [
+      makeAlert({ id: "top", timestamp: 3 }),
+      makeAlert({ id: "seen", timestamp: 2 }),
+      makeAlert({ id: "new", timestamp: 1 }),
+    ]
+
+    const html = renderToStaticMarkup(
+      <AlertStack alertas={alertas} onAbrir={() => {}} nuevasIds={new Set(["new"])} />,
+    )
+
+    expect(html.match(/Nueva/g)).toHaveLength(1)
+  })
+
+  it('renders the secondary row "Nueva" dot in normal flow (not absolutely positioned) so it cannot overlap the timestamp (F4)', () => {
+    const alertas = [
+      makeAlert({ id: "top", timestamp: 2 }),
+      makeAlert({ id: "secondary", timestamp: 1 }),
+    ]
+
+    const html = renderToStaticMarkup(
+      <AlertStack alertas={alertas} onAbrir={() => {}} nuevasIds={new Set(["secondary"])} />,
+    )
+
+    // Isolate the markup right after the secondary card's <button> tag opens.
+    const afterAttr = html.split(`data-alert-id="secondary"`)[1] ?? ""
+    const afterButtonOpenTag = afterAttr.slice(afterAttr.indexOf(">") + 1)
+    // The first child element should be the dot's <span>, not absolutely positioned.
+    const firstSpanOpenTag = afterButtonOpenTag.slice(0, afterButtonOpenTag.indexOf(">") + 1)
+    expect(firstSpanOpenTag).toMatch(/^<span/)
+    expect(firstSpanOpenTag).not.toContain("absolute")
+    expect(afterButtonOpenTag).toContain("Nueva")
+  })
 })

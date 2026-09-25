@@ -98,9 +98,9 @@ function SecondaryAlertCard({
       type="button"
       data-alert-id={alerta.id}
       onClick={(ev) => onAbrir(alerta, ev.currentTarget)}
-      className={`relative flex h-22 shrink-0 items-center gap-4 rounded-2xl border-4 px-5 text-left ${e.fondo} ${e.borde} ${e.textoSobreFondo}`}
+      className={`flex h-22 shrink-0 items-center gap-4 rounded-2xl border-4 px-5 text-left ${e.fondo} ${e.borde} ${e.textoSobreFondo}`}
     >
-      {nueva && <NuevaDot />}
+      {nueva && <NuevaDotEnFlujo />}
       <Icono className="h-10 w-10 shrink-0" strokeWidth={2.5} aria-hidden />
       <span className="shrink-0 text-2xl font-black uppercase leading-none">
         {SEVERIDAD_PALABRA[alerta.severidad]}
@@ -118,9 +118,25 @@ function SecondaryAlertCard({
   )
 }
 
+/** Punto "Nueva" superpuesto (tarjeta principal: hay espacio de sobra, no se solapa con nada). */
 function NuevaDot() {
   return (
     <span className="absolute right-4 top-4 flex items-center">
+      <span className="h-5 w-5 rounded-full bg-current" aria-hidden />
+      <span className="sr-only">Nueva</span>
+    </span>
+  )
+}
+
+/**
+ * Punto "Nueva" en flujo normal, como primer hijo de la fila (F4): la fila
+ * secundaria es una sola línea de 88px con hora al final, así que un punto
+ * absolutamente posicionado terminaba solapando la hora. En flujo normal
+ * siempre reserva su propio espacio y nunca se superpone a nada.
+ */
+function NuevaDotEnFlujo() {
+  return (
+    <span className="flex shrink-0 items-center">
       <span className="h-5 w-5 rounded-full bg-current" aria-hidden />
       <span className="sr-only">Nueva</span>
     </span>
