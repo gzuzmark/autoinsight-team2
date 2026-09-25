@@ -138,11 +138,17 @@ export function haceCuanto(timestamp: number): string {
   return `hace ${horas} h`
 }
 
-/** Formats a timestamp as 24h HH:MM (e.g. "14:05") in the device's local time zone. */
+/**
+ * Formats a timestamp as 24h HH:MM (e.g. "14:05") in the device's local time
+ * zone. Uses `hourCycle: "h23"` explicitly (00-23, midnight as "00") instead
+ * of only `hour12: false`: some ICU implementations render `hour12: false`
+ * as the h24 cycle (01-24), which shows midnight as "24:00" instead of
+ * "00:00" (F7).
+ */
 export function formatearHora(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString("es-AR", {
     hour: "2-digit",
     minute: "2-digit",
-    hour12: false,
+    hourCycle: "h23",
   })
 }

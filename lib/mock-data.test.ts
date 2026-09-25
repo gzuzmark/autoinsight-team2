@@ -12,4 +12,9 @@ describe("formatearHora", () => {
     const ts = new Date(2026, 8, 25, 14, 5).getTime()
     expect(formatearHora(ts)).toBe("14:05")
   })
+
+  it("formats midnight as 00:05, never 24:05 (F7)", () => {
+    const ts = new Date(2026, 8, 25, 0, 5).getTime()
+    expect(formatearHora(ts)).toBe("00:05")
+  })
 })
