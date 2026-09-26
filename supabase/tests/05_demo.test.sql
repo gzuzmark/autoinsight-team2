@@ -33,17 +33,17 @@ select is(
   'the generated alert is persisted'
 );
 select is(
-  (select severidad::text from public.alertas where titulo = 'Paro de línea por fuga de aire'),
+  (select severidad::text from public.alertas where linea_id = '22222222-2222-2222-2222-222222222222' and titulo = 'Paro de línea por fuga de aire'),
   'parar',
   'the generated alert copies the template severidad'
 );
 select is(
-  (select estacion_id from public.alertas where titulo = 'Paro de línea por fuga de aire'),
+  (select estacion_id from public.alertas where linea_id = '22222222-2222-2222-2222-222222222222' and titulo = 'Paro de línea por fuga de aire'),
   (select id from public.estaciones where linea_id = '22222222-2222-2222-2222-222222222222' and numero = 6),
   'the generated alert links to the matching estacion by numero'
 );
 select ok(
-  (select valor between 0 and 100 from public.alertas where titulo = 'Paro de línea por fuga de aire'),
+  (select valor between 0 and 100 from public.alertas where linea_id = '22222222-2222-2222-2222-222222222222' and titulo = 'Paro de línea por fuga de aire'),
   'the generated alert valor falls within the template range'
 );
 
