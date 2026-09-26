@@ -1,7 +1,7 @@
 -- demo_generar_alertas / demo_autoresolver tests: weighted inserts, dedupe,
 -- auto-resolve by age.
 begin;
-select plan(12);
+select plan(14);
 
 -- Isolate from supabase/seed.sql: clear any pre-existing active alerts so
 -- demo_autoresolver's count below reflects only this test's own data, and
@@ -100,6 +100,23 @@ select is(
   private.antiguedad_autoresolver_defecto(),
   interval '30 minutes',
   'private.antiguedad_autoresolver_defecto returns 30 minutes'
+);
+
+-- Already-active templates are excluded before the weighted pick: the
+-- heavy template is active on this line, so the light one must be chosen.
+update public.plantillas_alerta set peso = 1000 where titulo = 'Paro de línea por fuga de aire';
+insert into public.plantillas_alerta (severidad, titulo, estacion_numero, unidad, valor_min, valor_max, limite, peso)
+  values ('atencion', 'Nivel de adhesivo bajo', 6, '%', 0, 100, 20, 1);
+select is(
+  (select count(*)::int from public.demo_generar_alertas('22222222-2222-2222-2222-222222222222'::uuid, 1)),
+  1,
+  'demo_generar_alertas skips templates already active on the line instead of generating nothing'
+);
+select is(
+  (select count(*)::int from public.alertas
+     where linea_id = '22222222-2222-2222-2222-222222222222' and titulo = 'Nivel de adhesivo bajo' and estado = 'nueva'),
+  1,
+  'the remaining available template is the one generated'
 );
 
 select * from finish();
