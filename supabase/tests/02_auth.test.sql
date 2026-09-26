@@ -1,6 +1,6 @@
 -- Auth tests: iniciar_sesion success/failure/lockout/reset, session expiry.
 begin;
-select plan(47);
+select plan(49);
 
 insert into public.plantas (id, nombre) values ('11111111-1111-1111-1111-111111111111', 'Planta Test');
 insert into public.lineas (id, planta_id, nombre, turno)
@@ -165,6 +165,16 @@ select is(
   private.duracion_bloqueo_escalada(20),
   interval '60 minutes',
   'lock duration is capped at 60 minutes however many consecutive locks precede it'
+);
+select is(
+  private.duracion_bloqueo_escalada(36),
+  interval '60 minutes',
+  'lock duration stays capped past the interval overflow point (36 locks)'
+);
+select is(
+  private.duracion_bloqueo_escalada(2147483647),
+  interval '60 minutes',
+  'lock duration stays capped for the largest possible lock count'
 );
 
 insert into public.usuarios (id, linea_id, nombre, iniciales, color)

@@ -36,7 +36,11 @@ as $$ select interval '60 minutes' $$;
 -- The lockout duration for the n-th consecutive lock (n = bloqueos, already
 -- incremented for the lock being applied): private.duracion_bloqueo(),
 -- doubled once per prior consecutive lock, capped at
--- private.duracion_bloqueo_maxima().
+-- private.duracion_bloqueo_maxima(). The exponent is clamped BEFORE the
+-- multiplication: bloqueos is unbounded (it only resets on success/unlock),
+-- and 5 minutes * 2^35 overflows the interval range, which would abort the
+-- lock-applying transaction and disable the lockout. 2^20 * 5 minutes is far
+-- above any sane cap and far below the interval limit.
 create function private.duracion_bloqueo_escalada(p_bloqueos int)
 returns interval
 language sql
@@ -44,7 +48,7 @@ immutable
 set search_path = ''
 as $$
   select least(
-    private.duracion_bloqueo() * power(2::float8, greatest(p_bloqueos - 1, 0)::float8),
+    private.duracion_bloqueo() * power(2::float8, least(greatest(p_bloqueos - 1, 0), 20)::float8),
     private.duracion_bloqueo_maxima()
   )
 $$;
