@@ -415,6 +415,29 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      demo_simular_turno: {
+        Args: { p_cantidad?: number; p_sesion_id: string }
+        Returns: {
+          creada_en: string
+          estacion_id: string | null
+          estado: Database["public"]["Enums"]["estado_alerta"]
+          id: string
+          limite: number | null
+          linea_id: string
+          resuelta_en: string | null
+          resuelta_por: string | null
+          severidad: Database["public"]["Enums"]["severidad"]
+          titulo: string
+          unidad: string | null
+          valor: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "alertas"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       desbloquear_usuario: {
         Args: { p_usuario_id: string }
         Returns: undefined

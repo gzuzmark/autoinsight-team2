@@ -71,13 +71,15 @@ export class SupabaseFloorRepository implements FloorRepository {
   }
 
   async simular(sessionId: string): Promise<Tablero> {
-    // p_linea_id omitted (null): each generated alert picks a random line,
-    // matching demo_generar_alertas' own documented default. p_cantidad: 2,
-    // matching the count of ALERTAS_NUEVO_TURNO in the mock adapter (D19).
-    // Not scoped to the calling session's own line: this is a system-wide
-    // demo generator, not a per-user action; see the report for this
-    // open decision.
-    const { error } = await this.client.rpc("demo_generar_alertas", { p_cantidad: 2 })
+    // K1: demo_simular_turno validates the session and generates on the
+    // SESSION'S OWN line (unlike demo_generar_alertas with p_linea_id
+    // omitted, which picks a random line per alert -- the operator's own
+    // dashboard would often look unchanged). p_cantidad: 2, matching the
+    // count of ALERTAS_NUEVO_TURNO in the mock adapter (D19).
+    const { error } = await this.client.rpc("demo_simular_turno", {
+      p_sesion_id: sessionId,
+      p_cantidad: 2,
+    })
     if (error) throw this.mapError(error)
     return this.tablero(sessionId)
   }
