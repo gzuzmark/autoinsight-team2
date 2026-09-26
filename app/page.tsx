@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import type { UsuarioLogin } from "@/lib/domain/floor-repository"
 import { AppProvider, useApp } from "@/components/app-provider"
 import { LoginAvatars } from "@/components/login-avatars"
@@ -18,11 +18,6 @@ export default function Page() {
 function Shell() {
   const { usuario, usuarios, usuariosError, ingresar } = useApp()
   const [seleccionado, setSeleccionado] = useState<UsuarioLogin | null>(null)
-  const [demo, setDemo] = useState(false)
-
-  useEffect(() => {
-    setDemo(new URLSearchParams(window.location.search).get("demo") === "1")
-  }, [])
 
   async function onIngresar(pin: string): Promise<{ ok: boolean; mensaje?: string }> {
     if (!seleccionado) return { ok: false }
@@ -51,7 +46,7 @@ function Shell() {
           <LoginAvatars usuarios={usuarios} onSeleccionar={setSeleccionado} />
         )
       ) : (
-        <Dashboard demo={demo} />
+        <Dashboard />
       )}
     </main>
   )

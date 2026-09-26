@@ -19,9 +19,6 @@ corepack pnpm dev --port 3100
 ```
 
 Open [http://localhost:3100](http://localhost:3100) with your browser to see the result.
-To try the shift-simulation demo button, add `?demo=1` to the URL (also
-requires `DEMO_ENABLED=true` on the server — see "Environment variables"
-below; without it, the button posts to a route that 404s).
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
@@ -43,12 +40,12 @@ must be run separately.
 `corepack pnpm test:ui` (`scripts/ui-check.mjs`, Playwright driving system
 Chrome — no browser download) exercises login, PIN, dashboard (first visit),
 alert detail, dashboard (second visit / since-last-visit strip) and dashboard
-after the `?demo=1` shift simulation, and fails on document scroll, text
-under 24px, touch targets under 88px, clipped content, or console errors. The
-shift-simulation scenario needs the dev server started with
-`DEMO_ENABLED=true` (see below); `test:ui` runs the same way against either
-data source (`DATA_SOURCE=mock`, the default, or `DATA_SOURCE=supabase`
-against a running local stack).
+after resolving an alert, at four viewports (kiosk 1280x800, MacBook 1512x790,
+tablet portrait 768x1024, phone 390x844), and fails on horizontal overflow,
+document scroll at kiosk size, text under 24px, touch targets under 88px,
+clipped content, an unreachable alert card/overflow line, or console errors.
+It runs the same way against either data source (`DATA_SOURCE=mock`, the
+default, or `DATA_SOURCE=supabase` against a running local stack).
 
 ## Environment variables
 
@@ -60,7 +57,6 @@ never commit `.env.local` or a real `SUPABASE_SECRET_KEY`.
 | `DATA_SOURCE` | `mock` \| `supabase` | `mock` | Selects the `FloorRepository` adapter (D19, T7). `mock` needs nothing else below and reproduces the app's existing in-memory behavior (same users/PINs, same seed alerts) with no backend running. |
 | `SUPABASE_URL` | URL | — | Required only when `DATA_SOURCE=supabase`. Read server-side only (D20) — never sent to the browser, never `NEXT_PUBLIC_*`. Local value: `supabase status -o env` after `supabase start`. |
 | `SUPABASE_SECRET_KEY` | secret | — | Required only when `DATA_SOURCE=supabase`; the `service_role`/`sb_secret` key. Same source as above. Never commit a real value. |
-| `DEMO_ENABLED` | `true` \| anything else | disabled | Enables `POST /api/demo/simular` (D23); every other value 404s the route, so the "Simular turno" button (`?demo=1`) does nothing server-side unless this is exactly `"true"`. With Supabase it calls `demo_simular_turno`, which generates on the operator's own line and, when every alert template is already open there, first closes that line's oldest open template alerts as "No aplica" by the system (like a shift change), so the button always shows something new. |
 
 To run the app against a local Supabase stack instead of mock data:
 
@@ -226,9 +222,10 @@ Two things move a `valor`, both server-side, both demo-only:
   it records that alert's generated reading on the line's matching
   indicator (`valor` + `actualizado_en`); the tile's state then follows from
   that new `valor` automatically.
-- **A recovery reading (D26).** `demo_simular_turno` (the "Simular turno"
-  button) and `demo_autoresolver` (the stale-alert auto-resolve job) both
-  call `private.recuperar_indicadores` afterwards for the affected line,
+- **A recovery reading (D26).** `demo_simular_turno` / `demo_simular_turno_linea`
+  (shift simulation, triggered from Supabase -- see "Simulate a shift" below)
+  and `demo_autoresolver` (the stale-alert auto-resolve job) both call
+  `private.recuperar_indicadores` afterwards for the affected line,
   excluding any KPI a new alert just hit: every other indicator on that
   line moves ONE state toward OK, with a `valor` inside the new band
   (PARAR → a value inside the ATENCIÓN band; ATENCIÓN → a value inside the

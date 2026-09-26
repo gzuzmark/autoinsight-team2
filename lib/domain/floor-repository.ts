@@ -99,7 +99,4 @@ export interface FloorRepository {
    * @throws InvalidInputError
    */
   resolverAlerta(sessionId: string, alertaId: string, resolucion: Resolucion): Promise<void>
-  /** Simulates a shift change (adds new alerts) and returns the refreshed
-   * tablero. @throws SessionInvalidError */
-  simular(sessionId: string): Promise<Tablero>
 }

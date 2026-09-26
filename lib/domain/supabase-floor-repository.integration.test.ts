@@ -67,25 +67,6 @@ describe.skipIf(!canRun)("SupabaseFloorRepository (integration, local stack)", (
     ).rejects.toThrow()
   })
 
-  it("simular generates alerts on the user's own line (K1)", async () => {
-    const sessionId = await repo.iniciarSesion(ANA_ID, ANA_PIN)
-    expect(sessionId).toEqual(expect.any(String))
-
-    const before = await repo.tablero(sessionId!)
-    const beforeIds = new Set(before.alertas.map((a) => a.id))
-
-    const after = await repo.simular(sessionId!)
-    // Every alert already on the tablero before simular() is still on the
-    // SAME line's tablero after (simular's result IS the calling session's
-    // own tablero) -- this is only possible because demo_simular_turno
-    // generates on the session's own line, not a random other one.
-    expect(after.linea.nombre).toBe(before.linea.nombre)
-    const newIds = after.alertas.map((a) => a.id).filter((id) => !beforeIds.has(id))
-    expect(newIds.length).toBeGreaterThan(0)
-
-    await repo.cerrarSesion(sessionId!)
-  })
-
   it("tablero throws SessionInvalidError for an unknown session", async () => {
     await expect(repo.tablero("00000000-0000-0000-0000-000000000000")).rejects.toBeInstanceOf(
       SessionInvalidError,

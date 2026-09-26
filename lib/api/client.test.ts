@@ -109,15 +109,3 @@ describe("api.resolver", () => {
     expect(result).toEqual({ usuario: { id: "u1" } })
   })
 })
-
-describe("api.simular", () => {
-  it("POSTs /api/demo/simular and returns the updated tablero", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ usuario: { id: "u1" } }))
-    vi.stubGlobal("fetch", fetchMock)
-
-    const result = await api.simular()
-
-    expect(fetchMock).toHaveBeenCalledWith("/api/demo/simular", { method: "POST" })
-    expect(result).toEqual({ usuario: { id: "u1" } })
-  })
-})

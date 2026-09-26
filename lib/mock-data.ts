@@ -152,26 +152,6 @@ export const ALERTAS_INICIALES: Alerta[] = [
   },
 ]
 
-// Alertas que entran al "simular cambio de turno".
-export const ALERTAS_NUEVO_TURNO: Alerta[] = [
-  {
-    id: "n1",
-    severidad: "parar",
-    titulo: "Paro de línea por fuga de aire",
-    estacion: "Estación 6 · Neumática",
-    timestamp: min(0),
-    estado: "nueva",
-  },
-  {
-    id: "n2",
-    severidad: "atencion",
-    titulo: "Nivel de adhesivo bajo",
-    estacion: "Estación 5 · Curado",
-    timestamp: min(1),
-    estado: "nueva",
-  },
-]
-
 // Sorting now lives in lib/domain/alerts.ts (pure domain module); re-exported
 // here under the existing name so current imports keep working unchanged.
 export { sortAlerts as ordenarAlertas } from "./domain/alerts"

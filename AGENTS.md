@@ -31,17 +31,17 @@ separately.
 corepack pnpm test:run                       # unit tests + design-rules guard
 corepack pnpm exec tsc --noEmit               # real type gate
 corepack pnpm build                           # production build
-DEMO_ENABLED=true corepack pnpm dev --port 3100 &   # dev server for the browser check
-corepack pnpm test:ui                         # BASE_URL defaults to :3100
+corepack pnpm dev --port 3100 &               # dev server for the browser check
+corepack pnpm test:ui                         # BASE_URL defaults to :3100; checks 4 viewports
 git diff --check                              # whitespace/conflict markers
 ```
 
-`test:ui`'s shift-simulation scenario POSTs to `/api/demo/simular`, which
-404s unless the dev server was started with `DEMO_ENABLED=true` (D23) — the
-command above sets it. `DATA_SOURCE` defaults to `mock` and needs no other
-setup; see the README "Environment variables" section for the full table
-and for running the same check against a local Supabase stack instead
-(`DATA_SOURCE=supabase` in `.env.local`).
+`DATA_SOURCE` defaults to `mock` and needs no other setup; see the README
+"Environment variables" section for the full table and for running the same
+check against a local Supabase stack instead (`DATA_SOURCE=supabase` in
+`.env.local`). Shift simulation (E3/D28) is triggered from Supabase only now
+(SQL function or the `demo_panel` Table Editor row) — see the README
+"Simulate a shift (demo)" section.
 
 When a change touches `supabase/**`, also run (local Docker stack only,
 never the remote project — see the README "Supabase (local)" section):

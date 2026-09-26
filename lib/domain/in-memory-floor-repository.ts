@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
-import { activeAlerts, attendAlert, dismissAlert, mergeShiftAlerts } from "@/lib/domain/alerts"
-import { indicadorATablero, recuperarIndicador } from "@/lib/domain/indicadores"
+import { activeAlerts, attendAlert, dismissAlert } from "@/lib/domain/alerts"
+import { indicadorATablero } from "@/lib/domain/indicadores"
 import type {
   FloorRepository,
   IndicadorTablero,
@@ -11,7 +11,6 @@ import type {
 import { AlertNotFoundError, InvalidInputError, SessionInvalidError } from "@/lib/domain/floor-repository"
 import {
   ALERTAS_INICIALES,
-  ALERTAS_NUEVO_TURNO,
   INDICADORES,
   ordenarAlertas,
   PLANTA_NOMBRE,
@@ -109,36 +108,6 @@ export class InMemoryFloorRepository implements FloorRepository {
     this.alertas =
       resolucion === "atendida" ? attendAlert(this.alertas, alertaId) : dismissAlert(this.alertas, alertaId)
     this.ultimaActualizacion = Date.now()
-  }
-
-  async simular(sessionId: string): Promise<Tablero> {
-    this.requireSesion(sessionId)
-
-    const { alerts, added } = mergeShiftAlerts(this.alertas, ALERTAS_NUEVO_TURNO, Date.now())
-    this.alertas = alerts
-    if (added.length > 0) {
-      this.ultimaActualizacion = Date.now()
-      // D25/D26: none of the fixed ALERTAS_NUEVO_TURNO carries a KPI link
-      // today (mirroring the fact that none of their titles match a
-      // plantillas_alerta row with an indicador_clave in supabase/seed.sql),
-      // so every indicator gets a recovery reading -- same rule the
-      // Supabase adapter's demo_simular_turno applies when a shift adds
-      // alerts: KPIs that did NOT get a new bad reading move one state
-      // toward ok. Resolving an alert never reaches this method at all.
-      this.aplicarRecuperacion([])
-    }
-
-    return this.tablero(sessionId)
-  }
-
-  /** D26: moves every indicator NOT in `clavesExcluidas` one state toward
-   * ok. Extracted so a future KPI-linked shift alert can pass the hit
-   * claves in without touching this loop. */
-  private aplicarRecuperacion(clavesExcluidas: readonly string[]): void {
-    const ahora = Date.now()
-    this.indicadoresState = this.indicadoresState.map((ind) =>
-      clavesExcluidas.includes(ind.id) ? ind : recuperarIndicador(ind, ahora),
-    )
   }
 
   private requireSesion(sessionId: string): Sesion {

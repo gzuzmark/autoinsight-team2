@@ -68,10 +68,4 @@ export const api = {
       "No se pudo actualizar la alerta.",
     )
   },
-
-  async simular(): Promise<Tablero> {
-    const res = await fetch("/api/demo/simular", { method: "POST" })
-    if (!res.ok) throw new Error(await readErrorMessage(res, "No se pudo simular el cambio de turno."))
-    return res.json() as Promise<Tablero>
-  },
 }

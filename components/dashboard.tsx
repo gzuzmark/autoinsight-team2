@@ -9,9 +9,8 @@ import { IndicatorsRow } from "./indicators-row"
 import { AlertStack } from "./alert-stack"
 import { AlertDetail } from "./alert-detail"
 import { SinceLastVisit } from "./since-last-visit"
-import { DemoControls } from "./demo-controls"
 
-export function Dashboard({ demo }: { demo: boolean }) {
+export function Dashboard() {
   const {
     usuario,
     planta,
@@ -133,7 +132,6 @@ export function Dashboard({ demo }: { demo: boolean }) {
               </span>
               <span className="whitespace-nowrap text-2xl font-bold text-neutral-900">{usuario.nombre}</span>
             </div>
-            {demo && <DemoControls />}
             <button
               type="button"
               onClick={salir}

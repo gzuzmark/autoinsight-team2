@@ -28,7 +28,6 @@ type AppState = {
   salir: () => void
   marcarAtendida: (id: string) => void
   marcarNoAplica: (id: string) => void
-  simularCambioTurno: () => void
 }
 
 const Ctx = createContext<AppState | null>(null)
@@ -85,10 +84,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     api.resolver(id, "no_aplica").then(setTablero, () => setTableroError("No se pudo actualizar la alerta."))
   }, [])
 
-  const simularCambioTurno = useCallback(() => {
-    api.simular().then(setTablero, () => setTableroError("No se pudo simular el cambio de turno."))
-  }, [])
-
   const vista = useMemo(() => derivarVista(tablero), [tablero])
 
   const value: AppState = {
@@ -110,7 +105,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     salir,
     marcarAtendida,
     marcarNoAplica,
-    simularCambioTurno,
   }
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
