@@ -10,10 +10,18 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # Floor design rules
 
-This app is a plant-floor quality dashboard (tablet, 1280x800, gloves, glare,
-<5s glance). The product rules below (D4-D13, decided 2026-09-25, see
-`odd/tasks/autoinsight-port.md`) are load-bearing: any change that violates
-one is a regression, not a style preference.
+This app is a plant-floor quality dashboard (tablet, gloves, glare, <5s
+glance). The product rules below (D4-D13, decided 2026-09-25; D27-D29,
+Phase E, 2026-09-26; see `odd/tasks/autoinsight-port.md`) are load-bearing:
+any change that violates one is a regression, not a style preference.
+
+The app is mobile-first and responsive (D27): the exact "no scroll"
+1280x800 tablet geometry only applies at kiosk size (the `kiosk:` Tailwind
+variant, `min-width: 1280px` AND `min-height: 800px`, declared once in
+`app/globals.css`) — below that the page scrolls vertically like an
+ordinary page. The floor rules (text ≥ 24px, touch targets ≥ 88px, color +
+shape + word, no opacity/transitions/animations) apply at EVERY size, kiosk
+or not. See the README "Responsive layout and kiosk mode" section.
 
 ## Stack
 
@@ -62,11 +70,20 @@ types in the tree.
 
 `test:run` includes `lib/design-rules.test.ts`, a static guard that scans
 `components/**` and `app/**` (excluding `components/ui/**` and `*.test.*`)
-for forbidden patterns and checks the status palette's contrast/luminance
-programmatically. `test:ui` (`scripts/ui-check.mjs`) drives a real Chrome at
-1280x800 through login/PIN/dashboard/detail/second-visit/shift-simulation and
-fails on document scroll, text under 24px, touch targets under 88px, clipped
-content, or console errors. Every change must pass both before commit.
+for forbidden patterns (including the `kiosk:` variant staying within the
+standard Tailwind scale) and checks the status palette's contrast/luminance
+programmatically. `test:ui` (`scripts/ui-check.mjs`, E2) drives a real
+Chrome through login/PIN/dashboard/detail/second-visit/resolve-an-alert at
+four viewports — kiosk (1280x800, strict "no document scroll at all"),
+MacBook (1512x790), tablet portrait (768x1024) and phone (390x844) — and
+fails on horizontal overflow, document scroll at kiosk size, text under
+24px, touch targets under 88px, clipped content, an alert card/overflow
+line that cannot be scrolled into view, or console errors. It also runs one
+non-viewport-specific scenario (E4) that triggers a shift from OUTSIDE the
+app (a direct DB call via `UI_CHECK_DB_CONTAINER`) and asserts the
+dashboard auto-refreshes with no click; it is skipped with a notice when
+that env var is unset. Every change must pass `test:run` and `test:ui`
+before commit.
 
 ## D4-D13 checklist
 
@@ -74,7 +91,8 @@ content, or console errors. Every change must pass both before commit.
 - [ ] D5: KPI tiles show only KPI name + state word + shape icon — **no
       numeric value**.
 - [ ] D6: header shows plant name + "Última actualización HH:MM"; no
-      ACTUALIZAR button (deferred to T9, no server data yet).
+      ACTUALIZAR button — the dashboard auto-refreshes every 15s instead
+      (D29).
 - [ ] D7: alert detail stays full-screen with exactly two actions —
       "Atendida" and "No aplica" — both close the panel immediately, no
       confirmation, no thanks message, no "Útil"/"No útil".
@@ -90,7 +108,7 @@ content, or console errors. Every change must pass both before commit.
       text); background luminance strictly OK > ATENCIÓN > PARAR.
 - [ ] D11: every readable text >= 24px (`text-2xl`), state/severity words
       >= 48px (`text-5xl`), every touch target >= 88x88px (`size-22` /
-      `min-h-22` / `h-22` etc.).
+      `min-h-22` / `h-22` etc.) — at every screen size, not only kiosk (E1).
 - [ ] D12: no `opacity-*`, no alpha colors (`/NN` suffix), no
       `transition-*`, no `animate-*`, no `active:scale-*`; no muted/gray
       text (`text-neutral-300..800`, `text-gray-*`) — every visible letter
@@ -100,11 +118,32 @@ content, or console errors. Every change must pass both before commit.
       `aria-labelledby`, initial focus on open, Escape closes, and focus
       returns to the alert that opened it.
 
+## D27-D29 checklist (Phase E: responsive, kiosk, Supabase-triggered shifts)
+
+- [ ] D27: base styles are mobile-first; the fixed no-scroll 1280x800
+      geometry only applies under the `kiosk:` variant (`min-width: 1280px`
+      AND `min-height: 800px`); below kiosk size the page scrolls vertically
+      and never overflows horizontally or clips content; D4-D13 still hold
+      at every size.
+- [ ] D28: no in-app shift simulation (no button, no `?demo=1`, no
+      `DEMO_ENABLED`, no `/api/demo/simular`); a shift is triggered only
+      from Supabase — `demo_simular_turno_linea(linea, cantidad)` or the
+      `demo_panel` Table Editor row — both delegating to the same
+      `private.simular_turno_en_linea` the removed button used.
+- [ ] D29: the dashboard auto-refreshes `GET /api/tablero` every 15s while
+      logged in and the tab is visible (Page Visibility API; paused when
+      hidden, refetches on becoming visible); no overlapping requests; no
+      flicker; stops on logout; a 401 during a poll returns to login
+      cleanly (no error banner, no stale dashboard).
+
 ## Standard Tailwind scale only
 
 No arbitrary pixel values for size or spacing anywhere in `components/**` or
 `app/**` (`components/ui/**` — third-party shadcn primitives — and
-`*.test.*` files are exempt). Use the standard scale:
+`*.test.*` files are exempt). Use the standard scale. Breakpoint variants
+(`md:`, `lg:`, …) and the `kiosk:` custom variant are fine to combine with
+any of these — only the underlying value must stay on the standard scale
+(e.g. `kiosk:grid-cols-3`, `kiosk:h-22` are fine; `kiosk:h-[88px]` is not):
 
 - Font size: `text-2xl` (24px, minimum readable text) up to `text-5xl`
   (48px, state/severity words); never `text-[Npx]`, never

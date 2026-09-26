@@ -29,7 +29,7 @@ corepack pnpm test:run                # unit tests + lib/design-rules.test.ts gu
 corepack pnpm exec tsc --noEmit
 corepack pnpm build
 corepack pnpm dev --port 3100 &       # needed by test:ui below
-corepack pnpm test:ui                 # real-browser check at 1280x800, BASE_URL defaults to :3100
+corepack pnpm test:ui                 # real-browser check at 4 viewports, BASE_URL defaults to :3100
 git diff --check
 ```
 
@@ -179,20 +179,97 @@ information density.
 | Severity word vs. status word | Alert stack/detail use ALTA/MEDIA/BAJA (severity); KPI tiles and the empty state use OK/ATENCIÓN/PARAR (status) — never mixed for the same alert | The alert screens answer "how bad?"; the KPI screens answer "is this metric OK?" — using one word for both hid which question was being answered. |
 | State/severity word size | `text-5xl` = 48px | Legible at arm's length in a single glance. |
 | Readable text size | `text-2xl` = 24px minimum, everywhere, always near-black (`text-neutral-900`), never a gray/muted shade | Nothing readable falls below comfortable glance-reading size, and dimming text for "secondary" info costs contrast the floor can't spare. |
-| Touch targets | `size-22` / `min-h-22` / `h-22` = 88px minimum (Salir, Volver, demo button, alert cards, PIN keys, login avatars) | Reliable with work gloves; small targets cause mis-taps under time pressure. |
+| Touch targets | `size-22` / `min-h-22` / `h-22` = 88px minimum (Salir, Volver, alert cards, PIN keys, login avatars) at every screen size (E1) | Reliable with work gloves; small targets cause mis-taps under time pressure. |
 | Standard Tailwind scale only | No arbitrary `text-[Npx]`, `h-[Npx]`, `w-[Npx]` etc. anywhere in `components/**`/`app/**` (except `components/ui`, third-party shadcn primitives) | A fixed, guarded vocabulary (`text-2xl`…`text-5xl`, `size-22`, `size-24`, `h-14`, `w-70`, `max-w-225`, …) is easy to scan for compliance and prevents "just this once" one-off pixel values from drifting off the accessible scale. Enforced by `lib/design-rules.test.ts`. |
 | KPI tiles show no numbers | KPI name + state word + shape symbol only, no raw value | A bare number ("88.4%") needs interpretation time the floor doesn't have; the state word answers "is this OK?" directly. |
-| Top alert is tallest, largest font; secondary alerts are single-row | Top card: `min-h-35` (140px) and grows with spare space, `text-5xl` severity word. Secondary cards: fixed `h-22` (88px), one row (icon + severity + title + station + time), title `truncate`s instead of wrapping | A flex-ratio layout inside `overflow-hidden` let secondary cards shrink below their content and clip text at the worst-case size (strip + 3 alerts + overflow line); fixed/min heights with no ratio-based shrinking guarantee every line of every visible card stays fully readable. Checked by `scripts/ui-check.mjs` (no clipped content). |
+| Top alert is tallest, largest font; secondary alerts are single-row at kiosk size | Top card: `min-h-35` (140px) and grows with spare space, `text-5xl` severity word. Secondary cards: `kiosk:h-22` (88px) single row with `kiosk:truncate`; below kiosk size (E1) they use `min-h-22` and wrap the title onto a second line instead of truncating it, since a small screen has room to scroll but a cut-off title is more misleading there | A flex-ratio layout inside `overflow-hidden` let secondary cards shrink below their content and clip text at the worst-case size (strip + 3 alerts + overflow line); fixed/min heights with no ratio-based shrinking guarantee every line of every visible card stays fully readable. Checked by `scripts/ui-check.mjs` (no clipped content, at every viewport). |
 | Alert stack capped at 3 + overflow line | "+N alertas menos graves" (singular "+1 alerta menos grave"), fixed `h-14` row | Keeps the highest-severity items on screen without a scrolling list; the overflow line still discloses that lower-severity alerts exist. |
 | Unseen-alert dot | Solid dot + sr-only "Nueva" on alerts not seen at this user's last logout; no dot on first visit | Gives a returning operator a fast visual diff without reading every card; a first-time user has no prior baseline to diff against. |
 | Since-last-visit strip | Compact inline strip between header and KPI tiles (heading inline with the first line, up to 3 short lines total), hidden on first visit; "Sin cambios desde tu última visita, HH:MM" when nothing changed | An inline strip that never blocks the alert stack respects the <5s budget; a modal or overlay would cost an extra tap and hide the very screen the operator opened the app for. |
-| Single-row compact header | Plant name · line · shift · "Última actualización HH:MM" all `whitespace-nowrap` on one line; user name, avatar, demo button and Salir stay on the right | Keeps the header's vertical budget small and predictable so the alert stack below it always has enough room at 1280×800 without scrolling. |
-| "Última actualización HH:MM" | 24h HH:MM in the tablet's local time zone; now server-provided (`tablero.ultimaActualizacion`, T9) instead of the client's login/simulate clock | Gives a trust signal for data freshness tied to the actual data, not the client's local timer. |
-| No manual ACTUALIZAR button | Still not added in T9: the dashboard refetches `tablero` after login and after every action (attend/dismiss/simulate, D22), but nothing polls or lets the operator force a refresh mid-visit | Open product decision, not settled by D19-D23: is a manual refresh needed now that there is real server data, or is action-triggered refetch enough for the floor's <5s-glance use case? Left for a future decision, see the report handed back with this change. |
+| Single-row header at kiosk size, wraps below it | Plant name · line · shift · "Última actualización HH:MM" all `whitespace-nowrap`; user name, avatar and Salir stay on the right. At kiosk size (E1) the whole header is one row; below it, it stacks into a short column instead of clipping or squeezing | Keeps the header's vertical budget small and predictable at 1280×800 (no scrolling there); below kiosk size the page scrolls anyway, so the header can wrap instead of forcing content off-screen. |
+| "Última actualización HH:MM" | 24h HH:MM in the tablet's local time zone; server-provided (`tablero.ultimaActualizacion`, T9) instead of a client-side clock | Gives a trust signal for data freshness tied to the actual data, not the client's local timer. |
+| Auto-refresh every 15s, no manual ACTUALIZAR button (D29) | The dashboard refetches `tablero` on a 15-second timer while logged in and the tab is visible (paused when hidden, via the Page Visibility API; refetches immediately on becoming visible again); it also still refetches after every action (attend/dismiss). No overlapping requests, no flicker (the last good tablero stays on screen during a refetch), no loading spinner | The floor tablet has no one to press a refresh button, and a shift can be triggered from Supabase at any time (E3) with nobody touching the tablet — the dashboard must catch up on its own within a bounded, short window. |
 | "Atendida" / "No aplica", no confirmation | Two full-width buttons, both close the detail panel immediately; detail header shows the severity word (ALTA/MEDIA/BAJA) with the same icon/color as the stack; location + time at `text-4xl` (36px, ≥ 32px) | A confirmation dialog or a "thanks" message costs an extra tap and a second glance the operator doesn't have time for; showing a different word in the header than in the stack made the operator re-check they'd opened the right alert. |
 | Avatar + PIN login kept | 4-digit PIN pad, no physical keyboard | Explicit trade-off: costs ~4 extra taps versus a single badge/tap login, but there is no keyboard on the floor tablet and this matches the existing product's login model. |
 | No opacity, transitions or animation | All `opacity-*`, alpha colors, `transition-*`, `active:scale-*`, `animate-*` removed; `tw-animate-css` dropped | Motion and translucency read as noise under glare and cost attention the glance budget doesn't allow; state changes should be instant and certain. Enforced by `lib/design-rules.test.ts`. |
-| No scroll, no clipping at 1280×800 | Dashboard (first and second visit), login, PIN pad, alert detail and the post-shift-simulation dashboard all fit the viewport with zero document scroll and zero clipped content | A scrollbar or a silently clipped card hides alerts below the fold, which is unacceptable for a screen whose job is "show me what's wrong right now". Verified by `corepack pnpm test:ui` against a real Chrome, not just unit tests. |
+| No scroll only at kiosk size; nothing ever clips or overflows horizontally (D27) | At exactly 1280×800 (or larger in both dimensions, via the `kiosk:` variant) the dashboard, login, PIN pad and alert detail all fit the viewport with zero document scroll — that geometry is unchanged from before E1. Below kiosk size the page scrolls vertically like an ordinary page, but never horizontally, and nothing is ever silently clipped | A scrollbar or a silently clipped card hides alerts below the fold, which is unacceptable for a screen whose job is "show me what's wrong right now" — but that only holds at the fixed kiosk size the tablet actually runs at; forcing the same "zero scroll" rule onto a phone or a laptop browser would clip content instead, which is worse. Verified by `corepack pnpm test:ui` against a real Chrome at 4 viewports (see "Responsive layout and kiosk mode" below), not just unit tests. |
+
+## Responsive layout and kiosk mode
+
+D27 (E1): the app is mobile-first. Base styles target a small screen, and
+the floor rules above (text ≥ 24px, touch targets ≥ 88px, color + shape +
+word, no opacity/transitions/animations) apply at every size, not only at
+the tablet's fixed geometry. The exact "no scroll" kiosk screen that shipped
+before E1 is now gated behind a Tailwind v4 custom variant declared once in
+`app/globals.css`:
+
+```css
+@custom-variant kiosk (@media (min-width: 1280px) and (min-height: 800px));
+```
+
+Any utility prefixed `kiosk:` (e.g. `kiosk:h-dvh kiosk:overflow-hidden`,
+`kiosk:grid-cols-3`, `kiosk:truncate`) only applies when the viewport is at
+least 1280×800 in both dimensions — the tablet's actual size. Below that:
+
+- The page scrolls vertically like an ordinary web page; it never scrolls
+  or clips horizontally.
+- Login avatars: 1 column on phones, 2 from `md:`, 3 from `lg:` (independent
+  of the kiosk variant, so a wide-but-short laptop screen still gets 3
+  columns) — fluid-width cards instead of a fixed 280px.
+- PIN pad: keys stay ≥ 88px and the pad fits a 390px-wide phone.
+- Dashboard: the header wraps into a short column instead of squeezing onto
+  one line; the since-last-visit strip wraps; KPI tiles stack into 1 column
+  and become 3 columns from `md:`; alerts stack in a single column, and a
+  secondary alert's title wraps onto a second line instead of truncating
+  when the screen is too narrow to show it on one.
+- The alert detail dialog scrolls if its content does not fit, and its two
+  actions ("Atendida" / "No aplica") stack vertically instead of
+  side-by-side.
+
+`corepack pnpm test:ui` (`scripts/ui-check.mjs`, E2) checks all of this at
+four viewports: kiosk (1280×800, the strict "no document scroll at all"
+rules), a MacBook (1512×790 — wide but shorter than kiosk height, so it does
+NOT get the kiosk geometry, proving the variant is gated on both
+dimensions), a tablet in portrait (768×1024) and a phone (390×844). At every
+non-kiosk size it asserts: no horizontal overflow, no clipped content, text
+≥ 24px, touch targets ≥ 88px, and that every alert card and the "+N alertas
+menos graves" overflow line can be scrolled into view and are then actually
+visible. `lib/design-rules.test.ts` was checked to still pass with the
+`kiosk:` variant in use (it forbids arbitrary `[Npx]` sizes, sub-24px text,
+opacity, transitions and animations regardless of variant prefix).
+
+## Simulate a shift (demo)
+
+"Simular turno" is no longer a button in the app (D28, E3) — the app only
+ever shows real data. A shift is triggered from Supabase itself instead,
+either with no SQL at all or with one line of SQL:
+
+**Without SQL, from the Supabase dashboard:**
+
+1. Open your project in the [Supabase dashboard](https://supabase.com/dashboard).
+2. Go to **Table Editor** in the left sidebar.
+3. Open the **demo_panel** table (one row per line).
+4. Click the **simular_turno** cell of the line you want to simulate a
+   shift on.
+5. Choose **TRUE** and save.
+6. Wait up to 15 seconds — the tablet's dashboard for that line
+   auto-refreshes (D29) and shows the new alerts. The cell resets itself
+   back to FALSE once the simulation has run, and `ultima_simulacion` /
+   `alertas_generadas` record when it ran and how many alerts it made.
+
+**With SQL, from the SQL editor** (same rules, same result, useful for
+scripting or for `supabase/snippets/cron_demo.sql`):
+
+```sql
+select * from demo_simular_turno_linea('Línea 3 · Motores');
+```
+
+Both paths run the exact same rules the old in-app button always did: if
+the line is saturated (every alert template already active), the oldest
+open template alerts are closed as "No aplica" by the system first to make
+room (K5); a generated alert linked to a KPI records that reading on the
+line's indicator (D25); and every other indicator on the line then moves
+one step toward OK (a "recovery reading", D26).
 
 ## How KPI tiles change
 
