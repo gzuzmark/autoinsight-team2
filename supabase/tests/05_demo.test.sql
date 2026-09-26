@@ -1,7 +1,7 @@
 -- demo_generar_alertas / demo_autoresolver tests: weighted inserts, dedupe,
 -- auto-resolve by age.
 begin;
-select plan(8);
+select plan(11);
 
 -- Isolate from supabase/seed.sql: clear any pre-existing active alerts so
 -- demo_autoresolver's count below reflects only this test's own data, and
@@ -68,6 +68,32 @@ select is(
   (select resuelta_por from public.alertas where id = 'a0000000-0000-0000-0000-000000000009'),
   null,
   'a system auto-resolve leaves resuelta_por null'
+);
+
+-- J3: demo_autoresolver's default staleness age resolves inside the
+-- function via private.antiguedad_autoresolver_defecto(), and works with NO
+-- argument at all as service_role -- the only role that ever calls this RPC
+-- (from the app, or from a pg_cron job scheduled as postgres, see
+-- supabase/snippets/cron_demo.sql).
+insert into public.alertas (id, linea_id, severidad, titulo, creada_en)
+  values ('a0000000-0000-0000-0000-00000000000a', '22222222-2222-2222-2222-222222222222', 'ok', 'Vieja sin argumento', now() - interval '1 hour');
+set local role service_role;
+select lives_ok(
+  $$ select public.demo_autoresolver() $$,
+  'demo_autoresolver() with no argument succeeds as service_role'
+);
+reset role;
+select is(
+  (select estado::text from public.alertas where id = 'a0000000-0000-0000-0000-00000000000a'),
+  'no_aplica',
+  'demo_autoresolver() with no argument still resolves alerts older than the default 30 minutes'
+);
+
+-- The private getter behind that default returns exactly 30 minutes.
+select is(
+  private.antiguedad_autoresolver_defecto(),
+  interval '30 minutes',
+  'private.antiguedad_autoresolver_defecto returns 30 minutes'
 );
 
 select * from finish();
