@@ -215,7 +215,9 @@ async function runScenarios(browser) {
   await irTablero()
   await check("dashboard (first visit)")
 
-  await page.locator("main button").filter({ hasText: "FPY por debajo del 90" }).first().click()
+  // Open whichever alert is on top: the check must not depend on seed data
+  // still being active (earlier runs resolve alerts on shared databases).
+  await page.locator("main [data-alert-id]").first().click()
   await page.getByRole("dialog").waitFor({ state: "visible" })
   await check("detail")
 
