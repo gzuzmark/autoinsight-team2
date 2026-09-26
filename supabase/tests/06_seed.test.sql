@@ -100,42 +100,51 @@ select ok(
 -- typed values instead of a stringified row, so e.g. a numeric-vs-text or
 -- enum-label mismatch fails on the actual value, not on incidental
 -- formatting of the composite type's text representation.
-select is(
-  (select valor from public.indicadores
-     where linea_id = '00000000-0000-0000-0000-000000000013' and clave = 'fpy'),
-  88.4::numeric,
-  'Línea 3 FPY valor is 88.4, matching lib/mock-data.ts'
-);
-select is(
-  (select estado from public.indicadores
-     where linea_id = '00000000-0000-0000-0000-000000000013' and clave = 'fpy'),
-  'parar'::public.severidad,
-  'Línea 3 FPY estado is parar, matching lib/mock-data.ts'
-);
-select is(
-  (select valor from public.indicadores
-     where linea_id = '00000000-0000-0000-0000-000000000013' and clave = 'dph'),
-  5::numeric,
-  'Línea 3 Defectos / hora valor is 5, matching lib/mock-data.ts'
-);
-select is(
-  (select estado from public.indicadores
-     where linea_id = '00000000-0000-0000-0000-000000000013' and clave = 'dph'),
-  'atencion'::public.severidad,
-  'Línea 3 Defectos / hora estado is atencion, matching lib/mock-data.ts'
-);
-select is(
-  (select valor from public.indicadores
-     where linea_id = '00000000-0000-0000-0000-000000000013' and clave = 'scrap'),
-  1.6::numeric,
-  'Línea 3 Scrap valor is 1.6, matching lib/mock-data.ts'
-);
-select is(
-  (select estado from public.indicadores
-     where linea_id = '00000000-0000-0000-0000-000000000013' and clave = 'scrap'),
-  'ok'::public.severidad,
-  'Línea 3 Scrap estado is ok, matching lib/mock-data.ts'
-);
+-- The KPI values only match the seed on a freshly seeded database. Once
+-- readings are recorded (simulated shifts on a shared DB such as staging),
+-- some indicador is updated well after the others; skip instead of failing.
+select case
+  when (select max(actualizado_en) - min(actualizado_en) from public.indicadores) < interval '1 minute'
+  then collect_tap(
+  is(
+    (select valor from public.indicadores
+       where linea_id = '00000000-0000-0000-0000-000000000013' and clave = 'fpy'),
+    88.4::numeric,
+    'Línea 3 FPY valor is 88.4, matching lib/mock-data.ts'
+  ),
+  is(
+    (select estado from public.indicadores
+       where linea_id = '00000000-0000-0000-0000-000000000013' and clave = 'fpy'),
+    'parar'::public.severidad,
+    'Línea 3 FPY estado is parar, matching lib/mock-data.ts'
+  ),
+  is(
+    (select valor from public.indicadores
+       where linea_id = '00000000-0000-0000-0000-000000000013' and clave = 'dph'),
+    5::numeric,
+    'Línea 3 Defectos / hora valor is 5, matching lib/mock-data.ts'
+  ),
+  is(
+    (select estado from public.indicadores
+       where linea_id = '00000000-0000-0000-0000-000000000013' and clave = 'dph'),
+    'atencion'::public.severidad,
+    'Línea 3 Defectos / hora estado is atencion, matching lib/mock-data.ts'
+  ),
+  is(
+    (select valor from public.indicadores
+       where linea_id = '00000000-0000-0000-0000-000000000013' and clave = 'scrap'),
+    1.6::numeric,
+    'Línea 3 Scrap valor is 1.6, matching lib/mock-data.ts'
+  ),
+  is(
+    (select estado from public.indicadores
+       where linea_id = '00000000-0000-0000-0000-000000000013' and clave = 'scrap'),
+    'ok'::public.severidad,
+    'Línea 3 Scrap estado is ok, matching lib/mock-data.ts'
+  )
+  )
+  else skip('KPI readings changed since seeding (database in use); seed KPI values not comparable', 6)
+end;
 
 select * from finish();
 rollback;

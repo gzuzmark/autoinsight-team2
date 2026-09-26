@@ -89,7 +89,7 @@ select public.demo_generar_alertas('22222222-2222-2222-2222-222222222222'::uuid,
 select is(
   (select count(*)::int from public.indicadores
      where linea_id = '22222222-2222-2222-2222-222222222222' and clave = 'fpy'
-       and valor = (select valor from public.alertas where titulo = 'FPY por debajo del objetivo')),
+       and valor = (select valor from public.alertas where linea_id = '22222222-2222-2222-2222-222222222222' and titulo = 'FPY por debajo del objetivo')),
   1,
   'generating a KPI-linked alert records its valor on the matching indicador'
 );
