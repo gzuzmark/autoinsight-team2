@@ -19,7 +19,9 @@ corepack pnpm dev --port 3100
 ```
 
 Open [http://localhost:3100](http://localhost:3100) with your browser to see the result.
-To try the shift-simulation demo button, add `?demo=1` to the URL.
+To try the shift-simulation demo button, add `?demo=1` to the URL (also
+requires `DEMO_ENABLED=true` on the server — see "Environment variables"
+below; without it, the button posts to a route that 404s).
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
@@ -42,7 +44,41 @@ must be run separately.
 Chrome — no browser download) exercises login, PIN, dashboard (first visit),
 alert detail, dashboard (second visit / since-last-visit strip) and dashboard
 after the `?demo=1` shift simulation, and fails on document scroll, text
-under 24px, touch targets under 88px, clipped content, or console errors.
+under 24px, touch targets under 88px, clipped content, or console errors. The
+shift-simulation scenario needs the dev server started with
+`DEMO_ENABLED=true` (see below); `test:ui` runs the same way against either
+data source (`DATA_SOURCE=mock`, the default, or `DATA_SOURCE=supabase`
+against a running local stack).
+
+## Environment variables
+
+Copy `.env.example` to `.env.local` (gitignored) and fill in real values —
+never commit `.env.local` or a real `SUPABASE_SECRET_KEY`.
+
+| Variable | Values | Default | Notes |
+| --- | --- | --- | --- |
+| `DATA_SOURCE` | `mock` \| `supabase` | `mock` | Selects the `FloorRepository` adapter (D19, T7). `mock` needs nothing else below and reproduces the app's existing in-memory behavior (same users/PINs, same seed alerts) with no backend running. |
+| `SUPABASE_URL` | URL | — | Required only when `DATA_SOURCE=supabase`. Read server-side only (D20) — never sent to the browser, never `NEXT_PUBLIC_*`. Local value: `supabase status -o env` after `supabase start`. |
+| `SUPABASE_SECRET_KEY` | secret | — | Required only when `DATA_SOURCE=supabase`; the `service_role`/`sb_secret` key. Same source as above. Never commit a real value. |
+| `DEMO_ENABLED` | `true` \| anything else | disabled | Enables `POST /api/demo/simular` (D23); every other value 404s the route, so the "Simular turno" button (`?demo=1`) does nothing server-side unless this is exactly `"true"`. |
+
+To run the app against a local Supabase stack instead of mock data:
+
+```bash
+supabase start                 # first run downloads Docker images
+supabase status -o env         # copy the API URL and service_role key into .env.local
+```
+
+Then in `.env.local`:
+
+```
+DATA_SOURCE=supabase
+SUPABASE_URL=<API URL from supabase status>
+SUPABASE_SECRET_KEY=<service_role key from supabase status>
+```
+
+Restart `corepack pnpm dev --port 3100` after changing `.env.local` (env vars
+are read once at server start).
 
 ## Supabase (local)
 
@@ -50,8 +86,9 @@ The backend schema lives under `supabase/` (Supabase CLI, Docker). This is a
 clean rewrite (D15) of the app's Postgres schema, not derived from the
 legacy remote schema: Spanish identifiers matching the app's own contracts
 (D16), RLS enabled on every table with no anon/authenticated policies, and
-every RPC restricted to `service_role` (D17). The app itself is not wired to
-Supabase yet — the client data layer (T7-T9) is a separate, later change.
+every RPC restricted to `service_role` (D17). The app is wired to it (T7-T9)
+behind the `DATA_SOURCE` environment variable — see "Environment variables"
+above; `DATA_SOURCE=mock` (the default) needs none of the commands below.
 
 ```bash
 supabase start                          # first run downloads Docker images
@@ -108,8 +145,13 @@ select public.desbloquear_usuario('<usuario_id>'); -- as service_role
 ```
 
 Per-client/IP request throttling (rate-limiting the login route itself) is
-not a database concern and belongs to the Next.js route handlers (T8, still
-pending).
+not a database concern and belongs to the Next.js route handlers: `POST
+/api/sesion` (`lib/api/login-throttle.ts`, T8) rejects with 429 after 10
+attempts/minute from the same client (`x-forwarded-for` first hop, or a
+single shared fallback bucket when absent). This is in-memory per server
+instance — on serverless with multiple instances it only bounds guesses per
+instance, not globally; a shared store (e.g. Redis) would be needed for a
+real multi-instance deployment, which is out of scope here.
 
 Cutover to the remote project (`urxhacdnqgllscijffmh`) — applying these
 migrations there, seeding it, and enabling cron — is a separate, explicitly
@@ -149,8 +191,8 @@ information density.
 | Unseen-alert dot | Solid dot + sr-only "Nueva" on alerts not seen at this user's last logout; no dot on first visit | Gives a returning operator a fast visual diff without reading every card; a first-time user has no prior baseline to diff against. |
 | Since-last-visit strip | Compact inline strip between header and KPI tiles (heading inline with the first line, up to 3 short lines total), hidden on first visit; "Sin cambios desde tu última visita, HH:MM" when nothing changed | An inline strip that never blocks the alert stack respects the <5s budget; a modal or overlay would cost an extra tap and hide the very screen the operator opened the app for. |
 | Single-row compact header | Plant name · line · shift · "Última actualización HH:MM" all `whitespace-nowrap` on one line; user name, avatar, demo button and Salir stay on the right | Keeps the header's vertical budget small and predictable so the alert stack below it always has enough room at 1280×800 without scrolling. |
-| "Última actualización HH:MM" | 24h HH:MM in the tablet's local time zone, set on login and on shift simulation | Gives a trust signal for data freshness without a fake refresh action. |
-| No manual ACTUALIZAR button | Deferred to T9 (client data layer / API wiring) | With mock, static data, a refresh button that does nothing erodes trust faster than no button at all; it returns once there is real server data to fetch. |
+| "Última actualización HH:MM" | 24h HH:MM in the tablet's local time zone; now server-provided (`tablero.ultimaActualizacion`, T9) instead of the client's login/simulate clock | Gives a trust signal for data freshness tied to the actual data, not the client's local timer. |
+| No manual ACTUALIZAR button | Still not added in T9: the dashboard refetches `tablero` after login and after every action (attend/dismiss/simulate, D22), but nothing polls or lets the operator force a refresh mid-visit | Open product decision, not settled by D19-D23: is a manual refresh needed now that there is real server data, or is action-triggered refetch enough for the floor's <5s-glance use case? Left for a future decision, see the report handed back with this change. |
 | "Atendida" / "No aplica", no confirmation | Two full-width buttons, both close the detail panel immediately; detail header shows the severity word (ALTA/MEDIA/BAJA) with the same icon/color as the stack; location + time at `text-4xl` (36px, ≥ 32px) | A confirmation dialog or a "thanks" message costs an extra tap and a second glance the operator doesn't have time for; showing a different word in the header than in the stack made the operator re-check they'd opened the right alert. |
 | Avatar + PIN login kept | 4-digit PIN pad, no physical keyboard | Explicit trade-off: costs ~4 extra taps versus a single badge/tap login, but there is no keyboard on the floor tablet and this matches the existing product's login model. |
 | No opacity, transitions or animation | All `opacity-*`, alpha colors, `transition-*`, `active:scale-*`, `animate-*` removed; `tw-animate-css` dropped | Motion and translucency read as noise under glare and cost attention the glance budget doesn't allow; state changes should be instant and certain. Enforced by `lib/design-rules.test.ts`. |
