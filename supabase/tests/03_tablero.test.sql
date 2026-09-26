@@ -1,6 +1,6 @@
 -- Tablero tests: shape, ordering, first-visit, second-visit nuevas_ids.
 begin;
-select plan(11);
+select plan(13);
 
 insert into public.plantas (id, nombre) values ('11111111-1111-1111-1111-111111111111', 'Planta Test');
 insert into public.lineas (id, planta_id, nombre, turno)
@@ -85,6 +85,43 @@ select is(
   (public.tablero(:'second_iniciar_sesion') -> 'nuevas_ids' -> 0),
   to_jsonb('a0000000-0000-0000-0000-000000000003'::text),
   'second visit: nuevas_ids contains the newly created alert id'
+);
+
+-- H3: a previous session that expired without `fin` (12h timeout, never
+-- closed by cerrar_sesion) still counts as a last visit. Its effective end
+-- is inicio + private.duracion_sesion(), not "never visited". Uses a fresh
+-- linea/user so Ana Ríos' more recent sessions and Línea Test's other
+-- alertas above cannot leak into nuevas_ids or outrank the expired session.
+insert into public.lineas (id, planta_id, nombre, turno)
+  values ('22222222-2222-2222-2222-222222222224', '11111111-1111-1111-1111-111111111111', 'Línea Expiry', 'Turno mañana');
+insert into public.usuarios (id, linea_id, nombre, iniciales, color)
+  values ('33333333-3333-3333-3333-333333333334', '22222222-2222-2222-2222-222222222224', 'Uso Expirado', 'UE', '#334455');
+insert into public.usuarios_pin (usuario_id, pin_hash)
+  values ('33333333-3333-3333-3333-333333333334', extensions.crypt('4321', extensions.gen_salt('bf')));
+insert into public.sesiones (id, usuario_id, inicio)
+  values (
+    '99999999-9999-9999-9999-999999999999',
+    '33333333-3333-3333-3333-333333333334',
+    now() - interval '20 hours'
+  );
+insert into public.alertas (id, linea_id, severidad, titulo, creada_en)
+  values (
+    'a0000000-0000-0000-0000-000000000005',
+    '22222222-2222-2222-2222-222222222224',
+    'ok',
+    'Tras sesión expirada',
+    now() - interval '7 hours' -- after the expired session's effective end (20h - 12h = 8h ago)
+  );
+select public.iniciar_sesion('33333333-3333-3333-3333-333333333334', '4321') \gset third_
+select is(
+  (public.tablero(:'third_iniciar_sesion') ->> 'ultima_visita')::timestamptz,
+  (now() - interval '20 hours' + interval '12 hours'),
+  'third visit: ultima_visita is the expired session''s inicio + duracion_sesion(), not its (null) fin'
+);
+select is(
+  jsonb_array_length(public.tablero(:'third_iniciar_sesion') -> 'nuevas_ids'),
+  1,
+  'third visit: nuevas_ids is computed against the expired session''s effective end time'
 );
 
 select * from finish();
