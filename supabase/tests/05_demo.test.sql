@@ -1,7 +1,7 @@
 -- demo_generar_alertas / demo_autoresolver tests: weighted inserts, dedupe,
 -- auto-resolve by age.
 begin;
-select plan(14);
+select plan(16);
 
 -- Isolate from supabase/seed.sql: clear any pre-existing active alerts so
 -- demo_autoresolver's count below reflects only this test's own data, and
@@ -117,6 +117,28 @@ select is(
      where linea_id = '22222222-2222-2222-2222-222222222222' and titulo = 'Nivel de adhesivo bajo' and estado = 'nueva'),
   1,
   'the remaining available template is the one generated'
+);
+
+-- Random-line pick only considers lines that still have an available template
+-- (regressed once in migration 015): 10 saturated lines vs. the seed lines.
+delete from public.plantillas_alerta;
+insert into public.plantillas_alerta (severidad, titulo, estacion_numero, unidad, valor_min, valor_max, limite, peso)
+  values ('atencion', 'Plantilla única de prueba', 6, '%', 0, 100, 20, 1);
+insert into public.lineas (id, planta_id, nombre, turno)
+  select ('44444444-4444-4444-4444-4444444444' || lpad(g::text, 2, '0'))::uuid,
+         '11111111-1111-1111-1111-111111111111', 'Saturada ' || g, 'Turno mañana'
+  from generate_series(1, 10) g;
+insert into public.alertas (linea_id, severidad, titulo)
+  select ('44444444-4444-4444-4444-4444444444' || lpad(g::text, 2, '0'))::uuid, 'atencion', 'Plantilla única de prueba'
+  from generate_series(1, 10) g;
+select is(
+  (select count(*)::int from public.demo_generar_alertas(null, 1)),
+  1,
+  'a random-line pick never lands on a line where every template is already active'
+);
+select ok(
+  pg_get_functiondef('public.demo_generar_alertas(uuid, int)'::regprocedure) ilike '%on conflict%do nothing%',
+  'demo_generar_alertas keeps ON CONFLICT DO NOTHING so concurrent callers never fail on the dedupe index'
 );
 
 select * from finish();
