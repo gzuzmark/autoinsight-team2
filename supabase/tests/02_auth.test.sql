@@ -1,6 +1,6 @@
 -- Auth tests: iniciar_sesion success/failure/lockout/reset, session expiry.
 begin;
-select plan(25);
+select plan(36);
 
 insert into public.plantas (id, nombre) values ('11111111-1111-1111-1111-111111111111', 'Planta Test');
 insert into public.lineas (id, planta_id, nombre, turno)
@@ -69,6 +69,87 @@ select throws_ok(
   '28000',
   null,
   'tablero rejects an expired session (older than 12h) with errcode 28000'
+);
+
+-- H7: tablero rejects an already-closed session (fin is not null) ----------
+insert into public.sesiones (id, usuario_id, fin)
+  values ('55555555-5555-5555-5555-555555555556', '33333333-3333-3333-3333-333333333333', now());
+select throws_ok(
+  $$ select public.tablero('55555555-5555-5555-5555-555555555556') $$,
+  '28000',
+  null,
+  'tablero rejects a closed session with errcode 28000'
+);
+
+-- H7: tablero rejects a session whose user was deactivated afterwards ------
+insert into public.usuarios (id, linea_id, nombre, iniciales, color)
+  values ('77777777-7777-7777-7777-777777777777', '22222222-2222-2222-2222-222222222222', 'Se Va', 'SV', '#111111');
+insert into public.usuarios_pin (usuario_id, pin_hash)
+  values ('77777777-7777-7777-7777-777777777777', extensions.crypt('5555', extensions.gen_salt('bf')));
+select public.iniciar_sesion('77777777-7777-7777-7777-777777777777', '5555') \gset deact_
+update public.usuarios set activo = false where id = '77777777-7777-7777-7777-777777777777';
+select throws_ok(
+  format($$ select public.tablero('%s') $$, :'deact_iniciar_sesion'),
+  '28000',
+  null,
+  'tablero rejects a session belonging to a now-deactivated user'
+);
+
+-- H5: a lock reset to the past no longer blocks, and the next failure -------
+-- starts counting from zero again instead of relocking immediately.
+insert into public.usuarios (id, linea_id, nombre, iniciales, color)
+  values ('88888888-8888-8888-8888-888888888888', '22222222-2222-2222-2222-222222222222', 'Bloqueado', 'BL', '#222222');
+insert into public.usuarios_pin (usuario_id, pin_hash)
+  values ('88888888-8888-8888-8888-888888888888', extensions.crypt('6666', extensions.gen_salt('bf')));
+insert into public.intentos_login (usuario_id, fallidos, bloqueado_hasta)
+  values ('88888888-8888-8888-8888-888888888888', 5, now() - interval '1 minute');
+select is(
+  public.iniciar_sesion('88888888-8888-8888-8888-888888888888', 'wrong'),
+  null,
+  'an expired lock still rejects a wrong PIN'
+);
+select is(
+  (select fallidos from public.intentos_login where usuario_id = '88888888-8888-8888-8888-888888888888'),
+  1,
+  'the failure counter restarts at 1 after the lock expired, not 6'
+);
+select is(
+  (select bloqueado_hasta from public.intentos_login where usuario_id = '88888888-8888-8888-8888-888888888888'),
+  null,
+  'the lock is not re-armed by a single failure after it expired'
+);
+select isnt(
+  public.iniciar_sesion('88888888-8888-8888-8888-888888888888', '6666'),
+  null,
+  'the correct PIN succeeds right after an expired lock resets the counter'
+);
+
+-- H5: public.desbloquear_usuario clears a lockout unconditionally ----------
+insert into public.intentos_login (usuario_id, fallidos, bloqueado_hasta)
+  values ('44444444-4444-4444-4444-444444444444', 5, now() + interval '5 minutes')
+  on conflict (usuario_id) do update set fallidos = 5, bloqueado_hasta = now() + interval '5 minutes';
+select public.desbloquear_usuario('44444444-4444-4444-4444-444444444444');
+select is(
+  (select fallidos from public.intentos_login where usuario_id = '44444444-4444-4444-4444-444444444444'),
+  0,
+  'desbloquear_usuario resets the failure counter'
+);
+select is(
+  (select bloqueado_hasta from public.intentos_login where usuario_id = '44444444-4444-4444-4444-444444444444'),
+  null,
+  'desbloquear_usuario clears bloqueado_hasta'
+);
+select ok(
+  not has_function_privilege('anon', 'public.desbloquear_usuario(uuid)', 'execute'),
+  'anon cannot execute desbloquear_usuario'
+);
+select ok(
+  not has_function_privilege('authenticated', 'public.desbloquear_usuario(uuid)', 'execute'),
+  'authenticated cannot execute desbloquear_usuario'
+);
+select ok(
+  has_function_privilege('service_role', 'public.desbloquear_usuario(uuid)', 'execute'),
+  'service_role can execute desbloquear_usuario'
 );
 
 -- No EXECUTE on any RPC for anon/authenticated -------------------------------
