@@ -9,12 +9,24 @@ export type Usuario = {
   color: string
 }
 
+/**
+ * KPI reading (D24): `estado` is deliberately NOT a field here -- it is
+ * always derived from `valor` + the threshold fields via
+ * `lib/domain/indicadores.ts#estadoIndicador`, never stored independently,
+ * so the state word can never drift from the reading that produced it.
+ */
 export type Indicador = {
   id: string
   nombre: string
-  valor: string
   detalle: string
-  estado: Severidad
+  valor: number
+  unidad: string
+  /** true = higher valor is better (e.g. FPY); false = lower is better
+   * (e.g. Defectos/hora, Scrap). */
+  mayorEsMejor: boolean
+  umbralAtencion: number
+  umbralParar: number
+  actualizadoEn: number
 }
 
 export type Alerta = {
@@ -40,10 +52,45 @@ export const USUARIOS: Usuario[] = [
   { id: "u6", nombre: "Fer Luna", pin: "8642", iniciales: "FL", color: "#0d9488" },
 ]
 
+// Thresholds match supabase/seed.sql's Línea 3 indicadores exactly (D24/D25):
+// FPY is higher-is-better (atencion < 92, parar < 90); Defectos / hora and
+// Scrap are lower-is-better (atencion/parar above their respective
+// thresholds). The valor values below land in the same states as before
+// (FPY parar, Defectos atencion, Scrap ok) -- see lib/domain/indicadores.ts.
 export const INDICADORES: Indicador[] = [
-  { id: "fpy", nombre: "FPY", valor: "88.4 %", detalle: "Rendimiento a primera pasada", estado: "parar" },
-  { id: "dph", nombre: "Defectos / hora", valor: "5", detalle: "Umbral de atención 4–6", estado: "atencion" },
-  { id: "scrap", nombre: "Scrap", valor: "1.6 %", detalle: "Dentro del objetivo (≤ 2 %)", estado: "ok" },
+  {
+    id: "fpy",
+    nombre: "FPY",
+    detalle: "Rendimiento a primera pasada",
+    valor: 88.4,
+    unidad: "%",
+    mayorEsMejor: true,
+    umbralAtencion: 92,
+    umbralParar: 90,
+    actualizadoEn: AHORA,
+  },
+  {
+    id: "dph",
+    nombre: "Defectos / hora",
+    detalle: "Umbral de atención 4–6",
+    valor: 5,
+    unidad: "defectos/h",
+    mayorEsMejor: false,
+    umbralAtencion: 4,
+    umbralParar: 6,
+    actualizadoEn: AHORA,
+  },
+  {
+    id: "scrap",
+    nombre: "Scrap",
+    detalle: "Dentro del objetivo (≤ 2 %)",
+    valor: 1.6,
+    unidad: "%",
+    mayorEsMejor: false,
+    umbralAtencion: 2,
+    umbralParar: 3,
+    actualizadoEn: AHORA,
+  },
 ]
 
 export const ALERTAS_INICIALES: Alerta[] = [

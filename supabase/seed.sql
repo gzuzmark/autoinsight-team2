@@ -53,17 +53,26 @@ insert into public.usuarios_pin (usuario_id, pin_hash) values
   ('00000000-0000-0000-0000-000000000105', extensions.crypt('4321', extensions.gen_salt('bf'))),
   ('00000000-0000-0000-0000-000000000106', extensions.crypt('8642', extensions.gen_salt('bf')));
 
--- KPIs per line. Línea 3 values match lib/mock-data.ts INDICADORES exactly.
-insert into public.indicadores (linea_id, clave, nombre, valor, unidad, estado, detalle, orden) values
-  ('00000000-0000-0000-0000-000000000013', 'fpy', 'FPY', 88.4, '%', 'parar', 'Rendimiento a primera pasada', 1),
-  ('00000000-0000-0000-0000-000000000013', 'dph', 'Defectos / hora', 5, 'defectos/h', 'atencion', 'Umbral de atención 4-6', 2),
-  ('00000000-0000-0000-0000-000000000013', 'scrap', 'Scrap', 1.6, '%', 'ok', 'Dentro del objetivo (<= 2 %)', 3),
-  ('00000000-0000-0000-0000-000000000011', 'fpy', 'FPY', 94.2, '%', 'ok', 'Rendimiento a primera pasada', 1),
-  ('00000000-0000-0000-0000-000000000011', 'dph', 'Defectos / hora', 2, 'defectos/h', 'ok', 'Umbral de atención 4-6', 2),
-  ('00000000-0000-0000-0000-000000000011', 'scrap', 'Scrap', 0.9, '%', 'ok', 'Dentro del objetivo (<= 2 %)', 3),
-  ('00000000-0000-0000-0000-000000000012', 'fpy', 'FPY', 90.1, '%', 'atencion', 'Rendimiento a primera pasada', 1),
-  ('00000000-0000-0000-0000-000000000012', 'dph', 'Defectos / hora', 4, 'defectos/h', 'atencion', 'Umbral de atención 4-6', 2),
-  ('00000000-0000-0000-0000-000000000012', 'scrap', 'Scrap', 1.8, '%', 'atencion', 'Dentro del objetivo (<= 2 %)', 3);
+-- KPIs per line (D24). `estado` is a GENERATED column derived from
+-- valor/mayor_es_mejor/umbral_atencion/umbral_parar (see migration
+-- 20260926000015), so it is NOT listed here. Thresholds: FPY is
+-- higher-is-better (atencion < 92, parar < 90); Defectos / hora and Scrap
+-- are lower-is-better (atencion/parar above their thresholds). Línea 3
+-- values/thresholds match lib/mock-data.ts INDICADORES exactly and derive
+-- the same states as before this migration (FPY parar, Defectos atencion,
+-- Scrap ok). Líneas 1/2 use plausible values under the same thresholds.
+insert into public.indicadores
+  (linea_id, clave, nombre, valor, unidad, mayor_es_mejor, umbral_atencion, umbral_parar, detalle, orden)
+values
+  ('00000000-0000-0000-0000-000000000013', 'fpy', 'FPY', 88.4, '%', true, 92, 90, 'Rendimiento a primera pasada', 1),
+  ('00000000-0000-0000-0000-000000000013', 'dph', 'Defectos / hora', 5, 'defectos/h', false, 4, 6, 'Umbral de atención 4-6', 2),
+  ('00000000-0000-0000-0000-000000000013', 'scrap', 'Scrap', 1.6, '%', false, 2, 3, 'Dentro del objetivo (<= 2 %)', 3),
+  ('00000000-0000-0000-0000-000000000011', 'fpy', 'FPY', 94.2, '%', true, 92, 90, 'Rendimiento a primera pasada', 1),
+  ('00000000-0000-0000-0000-000000000011', 'dph', 'Defectos / hora', 2, 'defectos/h', false, 4, 6, 'Umbral de atención 4-6', 2),
+  ('00000000-0000-0000-0000-000000000011', 'scrap', 'Scrap', 0.9, '%', false, 2, 3, 'Dentro del objetivo (<= 2 %)', 3),
+  ('00000000-0000-0000-0000-000000000012', 'fpy', 'FPY', 90.1, '%', true, 92, 90, 'Rendimiento a primera pasada', 1),
+  ('00000000-0000-0000-0000-000000000012', 'dph', 'Defectos / hora', 4.5, 'defectos/h', false, 4, 6, 'Umbral de atención 4-6', 2),
+  ('00000000-0000-0000-0000-000000000012', 'scrap', 'Scrap', 2.4, '%', false, 2, 3, 'Dentro del objetivo (<= 2 %)', 3);
 
 -- Initial active alerts on Línea 3, matching lib/mock-data.ts
 -- ALERTAS_INICIALES (id/severidad/titulo/estación/relative age), with
@@ -108,15 +117,22 @@ insert into public.alertas (linea_id, estacion_id, severidad, titulo, valor, lim
 
 -- Simulator catalog (>= 8 templates), covering the stations above. Weights
 -- (peso) are relative, used by demo_generar_alertas' weighted pick.
-insert into public.plantillas_alerta (severidad, titulo, estacion_numero, unidad, valor_min, valor_max, limite, peso) values
-  ('parar', 'Paro de línea por fuga de aire', 6, '%', 60, 100, 90, 1),
-  ('atencion', 'Nivel de adhesivo bajo', 5, '%', 10, 30, 25, 3),
-  ('parar', 'Torque fuera de rango', 7, 'Nm', 8, 15, 10, 2),
-  ('atencion', 'Defectos por hora en aumento', 2, 'defectos/h', 4, 9, 4, 4),
-  ('atencion', 'Temperatura de horno alta', 5, '°C', 170, 210, 180, 3),
-  ('atencion', 'Retrabajo sobre lo esperado', 3, '%', 5, 12, 5, 3),
-  ('parar', 'Sensor de presión sin respuesta', 6, 'kPa', 0, 50, 80, 1),
-  ('atencion', 'Vibración anómala en banda', 4, 'mm/s', 3, 9, 4.5, 2),
-  ('ok', 'Nivel de refrigerante en rango', 1, '%', 40, 90, 30, 5);
+-- `indicador_clave` (D25) links a template to a KPI: FPY, Defectos / hora and
+-- Scrap each have one, with valor_min/valor_max chosen to land inside the
+-- band matching the template's own severidad (see the thresholds on the
+-- indicadores insert above) so a generated reading never disagrees with the
+-- alert it came from.
+insert into public.plantillas_alerta (severidad, titulo, estacion_numero, unidad, valor_min, valor_max, limite, peso, indicador_clave) values
+  ('parar', 'Paro de línea por fuga de aire', 6, '%', 60, 100, 90, 1, null),
+  ('atencion', 'Nivel de adhesivo bajo', 5, '%', 10, 30, 25, 3, null),
+  ('parar', 'Torque fuera de rango', 7, 'Nm', 8, 15, 10, 2, null),
+  ('atencion', 'Defectos por hora en aumento', 2, 'defectos/h', 4.5, 6, 4, 4, 'dph'),
+  ('atencion', 'Temperatura de horno alta', 5, '°C', 170, 210, 180, 3, null),
+  ('atencion', 'Retrabajo sobre lo esperado', 3, '%', 5, 12, 5, 3, null),
+  ('parar', 'Sensor de presión sin respuesta', 6, 'kPa', 0, 50, 80, 1, null),
+  ('atencion', 'Vibración anómala en banda', 4, 'mm/s', 3, 9, 4.5, 2, null),
+  ('ok', 'Nivel de refrigerante en rango', 1, '%', 40, 90, 30, 5, null),
+  ('parar', 'FPY por debajo del objetivo', 4, '%', 82, 89.5, 90, 2, 'fpy'),
+  ('atencion', 'Scrap por encima del objetivo', 3, '%', 2.1, 2.9, 2, 2, 'scrap');
 
 commit;

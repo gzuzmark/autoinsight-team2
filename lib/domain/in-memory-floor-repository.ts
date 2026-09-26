@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { activeAlerts, attendAlert, dismissAlert, mergeShiftAlerts } from "@/lib/domain/alerts"
+import { indicadorATablero } from "@/lib/domain/indicadores"
 import type {
   FloorRepository,
   IndicadorTablero,
@@ -16,6 +17,7 @@ import {
   PLANTA_NOMBRE,
   USUARIOS,
   type Alerta,
+  type Indicador,
 } from "@/lib/mock-data"
 
 const LINEA = { nombre: "Línea 3 · Motores", turno: "Turno mañana" }
@@ -42,6 +44,11 @@ type Sesion = {
  */
 export class InMemoryFloorRepository implements FloorRepository {
   private alertas: Alerta[] = ordenarAlertas(ALERTAS_INICIALES)
+  /** D24 mock parity: readings are mutable state, mirroring
+   * `indicadores` in the Supabase adapter. Cloned from the module-level
+   * fixture so each repository instance (each test, each dev server
+   * restart) starts from the same baseline instead of sharing mutations. */
+  private indicadoresState: Indicador[] = INDICADORES.map((i) => ({ ...i }))
   private ultimaActualizacion = Date.now()
   private readonly sesiones = new Map<string, Sesion>()
   /** Epoch ms of each user's most recent closed session (their "last
@@ -121,7 +128,7 @@ export class InMemoryFloorRepository implements FloorRepository {
   }
 
   private indicadores(): IndicadorTablero[] {
-    return INDICADORES.map(({ id, nombre, detalle, estado }) => ({ id, nombre, detalle, estado }))
+    return this.indicadoresState.map(indicadorATablero)
   }
 
   /** Currently-active alerts created after `ultimaVisita` (mirrors the

@@ -10,8 +10,12 @@ insert into public.usuarios (id, linea_id, nombre, iniciales, color)
 insert into public.usuarios_pin (usuario_id, pin_hash)
   values ('33333333-3333-3333-3333-333333333333', extensions.crypt('1234', extensions.gen_salt('bf')));
 
-insert into public.indicadores (linea_id, clave, nombre, valor, unidad, estado, detalle, orden)
-  values ('22222222-2222-2222-2222-222222222222', 'fpy', 'FPY', 88.4, '%', 'parar', 'Rendimiento a primera pasada', 1);
+-- estado is a GENERATED column (D24, migration 20260926000015): derived
+-- from valor + thresholds, not inserted directly. These thresholds derive
+-- 'parar' for valor 88.4 (higher-is-better, atencion 92, parar 90).
+insert into public.indicadores
+  (linea_id, clave, nombre, valor, unidad, mayor_es_mejor, umbral_atencion, umbral_parar, detalle, orden)
+  values ('22222222-2222-2222-2222-222222222222', 'fpy', 'FPY', 88.4, '%', true, 92, 90, 'Rendimiento a primera pasada', 1);
 
 insert into public.alertas (id, linea_id, severidad, titulo, creada_en)
   values

@@ -141,8 +141,11 @@ export type Database = {
           estado: Database["public"]["Enums"]["severidad"]
           id: string
           linea_id: string
+          mayor_es_mejor: boolean
           nombre: string
           orden: number
+          umbral_atencion: number
+          umbral_parar: number
           unidad: string
           valor: number
         }
@@ -150,11 +153,14 @@ export type Database = {
           actualizado_en?: string
           clave: string
           detalle: string
-          estado: Database["public"]["Enums"]["severidad"]
+          estado?: Database["public"]["Enums"]["severidad"]
           id?: string
           linea_id: string
+          mayor_es_mejor: boolean
           nombre: string
           orden?: number
+          umbral_atencion: number
+          umbral_parar: number
           unidad: string
           valor: number
         }
@@ -165,8 +171,11 @@ export type Database = {
           estado?: Database["public"]["Enums"]["severidad"]
           id?: string
           linea_id?: string
+          mayor_es_mejor?: boolean
           nombre?: string
           orden?: number
+          umbral_atencion?: number
+          umbral_parar?: number
           unidad?: string
           valor?: number
         }
@@ -263,6 +272,7 @@ export type Database = {
         Row: {
           estacion_numero: number
           id: string
+          indicador_clave: string | null
           limite: number
           peso: number
           severidad: Database["public"]["Enums"]["severidad"]
@@ -274,6 +284,7 @@ export type Database = {
         Insert: {
           estacion_numero: number
           id?: string
+          indicador_clave?: string | null
           limite: number
           peso: number
           severidad: Database["public"]["Enums"]["severidad"]
@@ -285,6 +296,7 @@ export type Database = {
         Update: {
           estacion_numero?: number
           id?: string
+          indicador_clave?: string | null
           limite?: number
           peso?: number
           severidad?: Database["public"]["Enums"]["severidad"]
