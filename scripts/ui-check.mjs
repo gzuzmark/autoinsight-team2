@@ -175,6 +175,34 @@ async function runScenarios(browser) {
     await irTablero()
   }
 
+  // K3: total count of active alerts shown on the dashboard -- the visible
+  // cards (top 3, one per data-alert-id) plus whatever the "+N alertas menos
+  // graves" overflow line reports, if present. Reading this count (instead
+  // of a specific alert's title, which only exists in mock mode's fixed
+  // ALERTAS_NUEVO_TURNO) is what lets the shift-simulation scenario below
+  // pass against BOTH mock data and a real, randomly-seeded local Supabase
+  // stack (DATA_SOURCE=supabase): whichever alert(s) demo_simular_turno
+  // actually generates, the total count still goes up.
+  function totalAlertCountInBrowser() {
+    const main = document.querySelector("main")
+    if (!main) return 0
+    const cards = main.querySelectorAll("[data-alert-id]").length
+    let overflow = 0
+    for (const el of main.querySelectorAll("div")) {
+      const text = (el.textContent || "").trim()
+      const m = text.match(/^\+(\d+) (?:alerta menos grave|alertas menos graves)$/)
+      if (m) {
+        overflow = parseInt(m[1], 10)
+        break
+      }
+    }
+    return cards + overflow
+  }
+
+  async function totalAlertCount() {
+    return page.evaluate(totalAlertCountInBrowser)
+  }
+
   await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle" })
   await irAvatares()
   await check("login")
@@ -210,8 +238,32 @@ async function runScenarios(browser) {
   await page.goto(`${BASE_URL}/?demo=1`, { waitUntil: "networkidle" })
   await irAvatares()
   await ingresarComoAna()
+  const alertCountBeforeSimular = await totalAlertCount()
   await page.getByRole("button", { name: /Simular turno/ }).click()
-  await page.getByText("Paro de línea por fuga de aire").first().waitFor({ state: "visible" })
+  // K3: data-agnostic -- wait for the total active-alert count to change,
+  // instead of a specific mock-only alert title, so this passes whether the
+  // shift simulation ran against the in-memory mock (fixed
+  // ALERTAS_NUEVO_TURNO) or a local Supabase stack (demo_simular_turno's
+  // weighted random pick from supabase/seed.sql's template catalog).
+  await page.waitForFunction(
+    (before) => {
+      const main = document.querySelector("main")
+      if (!main) return false
+      const cards = main.querySelectorAll("[data-alert-id]").length
+      let overflow = 0
+      for (const el of main.querySelectorAll("div")) {
+        const text = (el.textContent || "").trim()
+        const m = text.match(/^\+(\d+) (?:alerta menos grave|alertas menos graves)$/)
+        if (m) {
+          overflow = parseInt(m[1], 10)
+          break
+        }
+      }
+      return cards + overflow !== before
+    },
+    alertCountBeforeSimular,
+    { polling: 100 },
+  )
   await check("dashboard (after shift simulation)")
 
   if (consoleErrors.length > 0) {
