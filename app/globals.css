@@ -3,6 +3,12 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* E1/D27: the exact 1280x800 no-scroll floor-tablet layout only applies at
+   kiosk size (wide AND tall enough); everything below it is a normal
+   scrolling page. Declared once here; every `kiosk:` utility elsewhere
+   reads from this single variant so the breakpoint never drifts. */
+@custom-variant kiosk (@media (min-width: 1280px) and (min-height: 800px));
+
 @theme inline {
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);

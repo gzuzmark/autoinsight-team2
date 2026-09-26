@@ -10,7 +10,7 @@ export function LoginAvatars({
   onSeleccionar: (u: UsuarioLogin) => void
 }) {
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-10 px-10">
+    <div className="flex min-h-dvh w-full flex-col items-center justify-center gap-6 px-4 py-10 kiosk:min-h-full kiosk:gap-10 kiosk:px-10 kiosk:py-0">
       <div className="text-center">
         <h1 className="text-4xl font-black tracking-tight text-neutral-900">
           Alertas de calidad
@@ -20,13 +20,16 @@ export function LoginAvatars({
         </p>
       </div>
 
-      <ul className="grid grid-cols-3 gap-6">
+      {/* E1/D27: 1 column on phones, 2 from md, 3 from lg -- independent of
+          the kiosk no-scroll variant, so a wide-but-short screen (e.g. a
+          laptop at 1512x790) still gets 3 columns. */}
+      <ul className="grid w-full max-w-225 grid-cols-1 gap-4 md:grid-cols-2 kiosk:grid-cols-3 kiosk:gap-6">
         {usuarios.map((u) => (
           <li key={u.id}>
             <button
               type="button"
               onClick={() => onSeleccionar(u)}
-              className="flex min-h-24 w-70 items-center gap-5 rounded-2xl border-4 border-neutral-300 bg-white p-5 text-left"
+              className="flex min-h-24 w-full items-center gap-5 rounded-2xl border-4 border-neutral-300 bg-white p-5 text-left"
             >
               <span
                 aria-hidden

@@ -3,7 +3,7 @@ import { ESTILOS } from "@/lib/status"
 
 export function IndicatorsRow({ indicadores }: { indicadores: IndicadorTablero[] }) {
   return (
-    <div className="grid grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
       {indicadores.map((ind) => {
         const e = ESTILOS[ind.estado]
         const Icono = e.Icono

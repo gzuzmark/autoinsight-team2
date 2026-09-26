@@ -48,7 +48,7 @@ export function PinPad({
   const teclas = ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
 
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-8 px-10">
+    <div className="flex min-h-dvh w-full flex-col items-center justify-center gap-6 px-4 py-10 kiosk:min-h-full kiosk:gap-8 kiosk:px-10 kiosk:py-0">
       <div className="flex items-center gap-4">
         <span
           aria-hidden

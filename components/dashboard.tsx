@@ -96,12 +96,16 @@ export function Dashboard({ demo }: { demo: boolean }) {
   }
 
   return (
-    <div className="flex h-full w-full flex-col gap-4 p-4">
+    <div className="flex min-h-dvh w-full flex-col gap-4 p-4 kiosk:h-full">
       {/* F3: el contenido del tablero queda inert mientras el detalle está
           abierto (en vez de un focus trap manual), así Tab/Shift+Tab nunca
           puede salir del diálogo hacia el fondo. */}
-      <div ref={contenedorRef} className="flex min-h-0 flex-1 flex-col gap-4" inert={abierta !== null}>
-        <header className="flex shrink-0 items-center justify-between gap-4 rounded-2xl border-4 border-neutral-200 bg-white px-5 py-2">
+      <div
+        ref={contenedorRef}
+        className="flex flex-col gap-4 kiosk:min-h-0 kiosk:flex-1"
+        inert={abierta !== null}
+      >
+        <header className="flex shrink-0 flex-col gap-3 rounded-2xl border-4 border-neutral-200 bg-white px-5 py-3 kiosk:flex-row kiosk:items-center kiosk:justify-between kiosk:gap-4 kiosk:py-2">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
             <h1
               ref={encabezadoRef}
@@ -118,7 +122,7 @@ export function Dashboard({ demo }: { demo: boolean }) {
               </span>
             )}
           </div>
-          <div className="flex shrink-0 items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-3">
               <span
                 aria-hidden

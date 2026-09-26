@@ -98,14 +98,20 @@ function SecondaryAlertCard({
       type="button"
       data-alert-id={alerta.id}
       onClick={(ev) => onAbrir(alerta, ev.currentTarget)}
-      className={`flex h-22 shrink-0 items-center gap-4 rounded-2xl border-4 px-5 text-left ${e.fondo} ${e.borde} ${e.textoSobreFondo}`}
+      className={`flex min-h-22 flex-wrap items-center gap-x-4 gap-y-1 rounded-2xl border-4 px-5 py-3 text-left kiosk:h-22 kiosk:flex-nowrap kiosk:py-0 ${e.fondo} ${e.borde} ${e.textoSobreFondo}`}
     >
       {nueva && <NuevaDotEnFlujo />}
       <Icono className="h-10 w-10 shrink-0" strokeWidth={2.5} aria-hidden />
       <span className="shrink-0 text-2xl font-black uppercase leading-none">
         {SEVERIDAD_PALABRA[alerta.severidad]}
       </span>
-      <span className="min-w-0 flex-1 truncate text-2xl font-bold leading-none">{alerta.titulo}</span>
+      {/* E1: below kiosk size the title may wrap to a second line instead of
+          truncating (a name cut short is more misleading on a small screen
+          than a taller row); at kiosk size it keeps the original single-line
+          truncated geometry. */}
+      <span className="min-w-0 flex-1 basis-full whitespace-normal text-2xl font-bold leading-tight kiosk:basis-auto kiosk:truncate kiosk:leading-none">
+        {alerta.titulo}
+      </span>
       <span className="flex shrink-0 items-center gap-2 text-2xl font-semibold leading-none">
         <MapPin className="h-6 w-6" strokeWidth={2.5} aria-hidden />
         {alerta.estacion}

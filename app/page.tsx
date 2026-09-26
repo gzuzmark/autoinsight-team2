@@ -39,7 +39,7 @@ function Shell() {
   }
 
   return (
-    <main className="h-dvh w-full overflow-hidden bg-neutral-100 text-neutral-900">
+    <main className="min-h-dvh w-full overflow-x-hidden bg-neutral-100 text-neutral-900 kiosk:h-dvh kiosk:overflow-hidden">
       {!usuario ? (
         seleccionado ? (
           <PinPad usuario={seleccionado} onIngresar={onIngresar} onVolver={() => setSeleccionado(null)} />

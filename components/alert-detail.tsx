@@ -42,7 +42,7 @@ export function AlertDetail({
       aria-modal="true"
       aria-labelledby="alert-detail-heading"
     >
-      <div className={`flex items-center gap-5 border-b-4 p-6 ${e.fondo} ${e.borde} ${e.textoSobreFondo}`}>
+      <div className={`flex flex-wrap items-center gap-5 border-b-4 p-6 ${e.fondo} ${e.borde} ${e.textoSobreFondo}`}>
         <Icono className="h-20 w-20 shrink-0" strokeWidth={2.5} aria-hidden />
         <div className="min-w-0 flex-1">
           <p className="text-5xl font-black uppercase leading-none">{SEVERIDAD_PALABRA[alerta.severidad]}</p>
@@ -65,7 +65,7 @@ export function AlertDetail({
         </button>
       </div>
 
-      <div className="flex flex-1 flex-col justify-center gap-6 px-10">
+      <div className="flex flex-1 flex-col justify-center gap-6 overflow-y-auto px-6 py-6 kiosk:px-10 kiosk:py-0">
         <div className="flex flex-wrap gap-x-12 gap-y-4 text-4xl font-bold text-neutral-900">
           <span className="flex items-center gap-3">
             <MapPin className="h-9 w-9" strokeWidth={2.5} aria-hidden />
@@ -82,7 +82,7 @@ export function AlertDetail({
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 border-t-4 border-neutral-200 p-6">
+      <div className="grid grid-cols-1 gap-4 border-t-4 border-neutral-200 p-6 kiosk:grid-cols-2">
         <button
           type="button"
           onClick={onAtender}
