@@ -183,16 +183,19 @@ export type Database = {
       intentos_login: {
         Row: {
           bloqueado_hasta: string | null
+          bloqueos: number
           fallidos: number
           usuario_id: string
         }
         Insert: {
           bloqueado_hasta?: string | null
+          bloqueos?: number
           fallidos?: number
           usuario_id: string
         }
         Update: {
           bloqueado_hasta?: string | null
+          bloqueos?: number
           fallidos?: number
           usuario_id?: string
         }

@@ -1,6 +1,6 @@
 -- Auth tests: iniciar_sesion success/failure/lockout/reset, session expiry.
 begin;
-select plan(36);
+select plan(46);
 
 insert into public.plantas (id, nombre) values ('11111111-1111-1111-1111-111111111111', 'Planta Test');
 insert into public.lineas (id, planta_id, nombre, turno)
@@ -125,9 +125,10 @@ select isnt(
 );
 
 -- H5: public.desbloquear_usuario clears a lockout unconditionally ----------
-insert into public.intentos_login (usuario_id, fallidos, bloqueado_hasta)
-  values ('44444444-4444-4444-4444-444444444444', 5, now() + interval '5 minutes')
-  on conflict (usuario_id) do update set fallidos = 5, bloqueado_hasta = now() + interval '5 minutes';
+-- J4: also clears the consecutive-lock escalation counter (bloqueos).
+insert into public.intentos_login (usuario_id, fallidos, bloqueado_hasta, bloqueos)
+  values ('44444444-4444-4444-4444-444444444444', 5, now() + interval '5 minutes', 4)
+  on conflict (usuario_id) do update set fallidos = 5, bloqueado_hasta = now() + interval '5 minutes', bloqueos = 4;
 select public.desbloquear_usuario('44444444-4444-4444-4444-444444444444');
 select is(
   (select fallidos from public.intentos_login where usuario_id = '44444444-4444-4444-4444-444444444444'),
@@ -138,6 +139,87 @@ select is(
   (select bloqueado_hasta from public.intentos_login where usuario_id = '44444444-4444-4444-4444-444444444444'),
   null,
   'desbloquear_usuario clears bloqueado_hasta'
+);
+select is(
+  (select bloqueos from public.intentos_login where usuario_id = '44444444-4444-4444-4444-444444444444'),
+  0,
+  'desbloquear_usuario resets the consecutive-lock counter (bloqueos)'
+);
+
+-- J4: escalating lockout -----------------------------------------------------
+select is(
+  private.duracion_bloqueo_escalada(1),
+  interval '5 minutes',
+  'the first consecutive lock lasts exactly the base lockout duration'
+);
+select is(
+  private.duracion_bloqueo_escalada(2),
+  interval '10 minutes',
+  'the second consecutive lock duration doubles'
+);
+select is(
+  private.duracion_bloqueo_escalada(20),
+  interval '60 minutes',
+  'lock duration is capped at 60 minutes however many consecutive locks precede it'
+);
+
+insert into public.usuarios (id, linea_id, nombre, iniciales, color)
+  values ('cccccccc-cccc-cccc-cccc-cccccccccccc', '22222222-2222-2222-2222-222222222222', 'Escalado Uno', 'EU', '#663311');
+insert into public.usuarios_pin (usuario_id, pin_hash)
+  values ('cccccccc-cccc-cccc-cccc-cccccccccccc', extensions.crypt('7777', extensions.gen_salt('bf')));
+
+select public.iniciar_sesion('cccccccc-cccc-cccc-cccc-cccccccccccc', 'w1');
+select public.iniciar_sesion('cccccccc-cccc-cccc-cccc-cccccccccccc', 'w2');
+select public.iniciar_sesion('cccccccc-cccc-cccc-cccc-cccccccccccc', 'w3');
+select public.iniciar_sesion('cccccccc-cccc-cccc-cccc-cccccccccccc', 'w4');
+select public.iniciar_sesion('cccccccc-cccc-cccc-cccc-cccccccccccc', 'w5');
+select is(
+  (select bloqueos from public.intentos_login where usuario_id = 'cccccccc-cccc-cccc-cccc-cccccccccccc'),
+  1,
+  'the first lock sets bloqueos to 1'
+);
+select ok(
+  (select bloqueado_hasta from public.intentos_login where usuario_id = 'cccccccc-cccc-cccc-cccc-cccccccccccc')
+    between now() + interval '4 minutes 55 seconds' and now() + interval '5 minutes 5 seconds',
+  'the first lock lasts approximately the base 5 minutes'
+);
+
+-- Simulate the first lock having expired, then a second run of 5 failures.
+update public.intentos_login
+set bloqueado_hasta = now() - interval '1 minute'
+where usuario_id = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+select public.iniciar_sesion('cccccccc-cccc-cccc-cccc-cccccccccccc', 'w1');
+select public.iniciar_sesion('cccccccc-cccc-cccc-cccc-cccccccccccc', 'w2');
+select public.iniciar_sesion('cccccccc-cccc-cccc-cccc-cccccccccccc', 'w3');
+select public.iniciar_sesion('cccccccc-cccc-cccc-cccc-cccccccccccc', 'w4');
+select public.iniciar_sesion('cccccccc-cccc-cccc-cccc-cccccccccccc', 'w5');
+select is(
+  (select bloqueos from public.intentos_login where usuario_id = 'cccccccc-cccc-cccc-cccc-cccccccccccc'),
+  2,
+  'a second consecutive lock (after the first one expired) escalates bloqueos to 2'
+);
+select ok(
+  (select bloqueado_hasta from public.intentos_login where usuario_id = 'cccccccc-cccc-cccc-cccc-cccccccccccc')
+    between now() + interval '9 minutes 55 seconds' and now() + interval '10 minutes 5 seconds',
+  'the second consecutive lock lasts approximately double: 10 minutes'
+);
+
+-- A successful login resets bloqueos regardless of prior escalation history.
+insert into public.usuarios (id, linea_id, nombre, iniciales, color)
+  values ('dddddddd-dddd-dddd-dddd-dddddddddddd', '22222222-2222-2222-2222-222222222222', 'Escalado Reset', 'ER', '#334422');
+insert into public.usuarios_pin (usuario_id, pin_hash)
+  values ('dddddddd-dddd-dddd-dddd-dddddddddddd', extensions.crypt('8888', extensions.gen_salt('bf')));
+insert into public.intentos_login (usuario_id, fallidos, bloqueado_hasta, bloqueos)
+  values ('dddddddd-dddd-dddd-dddd-dddddddddddd', 0, null, 3);
+select isnt(
+  public.iniciar_sesion('dddddddd-dddd-dddd-dddd-dddddddddddd', '8888'),
+  null,
+  'a successful login succeeds regardless of prior escalation history'
+);
+select is(
+  (select bloqueos from public.intentos_login where usuario_id = 'dddddddd-dddd-dddd-dddd-dddddddddddd'),
+  0,
+  'a successful login resets the consecutive-lock counter (bloqueos)'
 );
 select ok(
   not has_function_privilege('anon', 'public.desbloquear_usuario(uuid)', 'execute'),

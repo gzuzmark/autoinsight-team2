@@ -92,15 +92,24 @@ route handlers (server-side) use the `service_role` (secret) key; `anon` and
 Login lockout: 5 consecutive wrong PINs lock a user out for
 `private.duracion_bloqueo()` (5 minutes); a lock that has already expired
 resets the failure counter, so the next attempt starts from zero again
-instead of relocking on a single new failure. `public.desbloquear_usuario(p_usuario_id)`
-(service_role only) clears a lockout immediately, for an admin/demo unlock:
+instead of relocking on a single new failure. Each *consecutive* lock (one
+that follows a previous lock with no successful login or admin unlock in
+between) lasts longer than the last: `private.duracion_bloqueo_escalada(n)`
+doubles the base 5 minutes for every prior consecutive lock
+(`intentos_login.bloqueos` tracks `n`), capped at
+`private.duracion_bloqueo_maxima()` (60 minutes) — 5 min, 10 min, 20 min, …,
+60 min. `bloqueos` resets to 0 on a successful login or an admin unlock, but
+*not* when a lock merely expires, so repeated lock cycles still escalate.
+`public.desbloquear_usuario(p_usuario_id)` (service_role only) clears a
+lockout immediately and resets both counters, for an admin/demo unlock:
 
 ```sql
 select public.desbloquear_usuario('<usuario_id>'); -- as service_role
 ```
 
 Per-client/IP request throttling (rate-limiting the login route itself) is
-not a database concern and belongs to the Next.js route handlers (T8).
+not a database concern and belongs to the Next.js route handlers (T8, still
+pending).
 
 Cutover to the remote project (`urxhacdnqgllscijffmh`) — applying these
 migrations there, seeding it, and enabling cron — is a separate, explicitly
