@@ -1,6 +1,6 @@
 -- Tablero tests: shape, ordering, first-visit, second-visit nuevas_ids.
 begin;
-select plan(13);
+select plan(15);
 
 insert into public.plantas (id, nombre) values ('11111111-1111-1111-1111-111111111111', 'Planta Test');
 insert into public.lineas (id, planta_id, nombre, turno)
@@ -122,6 +122,55 @@ select is(
   jsonb_array_length(public.tablero(:'third_iniciar_sesion') -> 'nuevas_ids'),
   1,
   'third visit: nuevas_ids is computed against the expired session''s effective end time'
+);
+
+-- J1: an open, unexpired parallel session (e.g. another device/tab still
+-- logged in) must never count as "the previous visit" -- only a CLOSED
+-- session (fin not null) or an EXPIRED one (inicio + duracion_sesion() <=
+-- now()) can. Fresh linea/user so the earlier blocks' sessions/alerts cannot
+-- leak in. Two prior sessions exist for this user: an older CLOSED one, and
+-- a more recent OPEN, unexpired one (started 1 minute ago) that must be
+-- ignored entirely, not merely outranked.
+insert into public.lineas (id, planta_id, nombre, turno)
+  values ('22222222-2222-2222-2222-222222222225', '11111111-1111-1111-1111-111111111111', 'Línea Paralela', 'Turno mañana');
+insert into public.usuarios (id, linea_id, nombre, iniciales, color)
+  values ('33333333-3333-3333-3333-333333333335', '22222222-2222-2222-2222-222222222225', 'Uso Paralelo', 'UP', '#556677');
+insert into public.usuarios_pin (usuario_id, pin_hash)
+  values ('33333333-3333-3333-3333-333333333335', extensions.crypt('1111', extensions.gen_salt('bf')));
+
+insert into public.sesiones (id, usuario_id, inicio, fin)
+  values (
+    '99999999-9999-9999-9999-999999999998',
+    '33333333-3333-3333-3333-333333333335',
+    now() - interval '3 hours',
+    now() - interval '2 hours'
+  );
+insert into public.sesiones (id, usuario_id, inicio, fin)
+  values (
+    '99999999-9999-9999-9999-999999999997',
+    '33333333-3333-3333-3333-333333333335',
+    now() - interval '1 minute',
+    null
+  );
+insert into public.alertas (id, linea_id, severidad, titulo, creada_en)
+  values (
+    'a0000000-0000-0000-0000-000000000006',
+    '22222222-2222-2222-2222-222222222225',
+    'ok',
+    'Tras cierre con sesión paralela abierta',
+    now() - interval '90 minutes'
+  );
+
+select public.iniciar_sesion('33333333-3333-3333-3333-333333333335', '1111') \gset fourth_
+select is(
+  (public.tablero(:'fourth_iniciar_sesion') ->> 'ultima_visita')::timestamptz,
+  (now() - interval '2 hours'),
+  'fourth visit: an open, unexpired parallel session is ignored; ultima_visita comes from the older closed session'
+);
+select is(
+  jsonb_array_length(public.tablero(:'fourth_iniciar_sesion') -> 'nuevas_ids'),
+  1,
+  'fourth visit: nuevas_ids is computed against the older closed session''s end, not the open parallel one'
 );
 
 select * from finish();
