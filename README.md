@@ -198,6 +198,54 @@ information density.
 | No opacity, transitions or animation | All `opacity-*`, alpha colors, `transition-*`, `active:scale-*`, `animate-*` removed; `tw-animate-css` dropped | Motion and translucency read as noise under glare and cost attention the glance budget doesn't allow; state changes should be instant and certain. Enforced by `lib/design-rules.test.ts`. |
 | No scroll, no clipping at 1280×800 | Dashboard (first and second visit), login, PIN pad, alert detail and the post-shift-simulation dashboard all fit the viewport with zero document scroll and zero clipped content | A scrollbar or a silently clipped card hides alerts below the fold, which is unacceptable for a screen whose job is "show me what's wrong right now". Verified by `corepack pnpm test:ui` against a real Chrome, not just unit tests. |
 
+## How KPI tiles change
+
+A KPI tile's state word (OK / ATENCIÓN / PARAR) is never stored on its own
+(D24, Phase D): it is always derived from the indicator's latest `valor` and
+two per-indicator thresholds. `indicadores.estado` is a Postgres GENERATED
+column (`private.estado_indicador`, migration
+`20260926000015_indicador_thresholds_and_readings.sql`); the mock adapter
+mirrors the same derivation in `lib/domain/indicadores.ts#estadoIndicador`.
+So the tile can only change when its `valor` changes, and every `valor`
+change is one of the two events below — never a direct edit of the state.
+
+| KPI (`clave`) | Direction | ATENCIÓN threshold | PARAR threshold |
+| --- | --- | --- | --- |
+| FPY (`fpy`) | higher is better | < 92 % | < 90 % |
+| Defectos / hora (`dph`) | lower is better | > 4 | > 6 |
+| Scrap (`scrap`) | lower is better | > 2 % | > 3 % |
+
+A value exactly ON a threshold falls into the better band (e.g. FPY = 92.0
+is OK, not ATENCIÓN; Defectos/hora = 6 is ATENCIÓN, not PARAR).
+
+Two things move a `valor`, both server-side, both demo-only:
+
+- **A generated alert with a linked KPI (D25).** `plantillas_alerta` (the
+  simulator's template catalog) can name an `indicador_clave`
+  (`fpy`/`dph`/`scrap`). When `demo_generar_alertas` picks such a template,
+  it records that alert's generated reading on the line's matching
+  indicator (`valor` + `actualizado_en`); the tile's state then follows from
+  that new `valor` automatically.
+- **A recovery reading (D26).** `demo_simular_turno` (the "Simular turno"
+  button) and `demo_autoresolver` (the stale-alert auto-resolve job) both
+  call `private.recuperar_indicadores` afterwards for the affected line,
+  excluding any KPI a new alert just hit: every other indicator on that
+  line moves ONE state toward OK, with a `valor` inside the new band
+  (PARAR → a value inside the ATENCIÓN band; ATENCIÓN → a value inside the
+  OK band; OK → a small, direction-safe nudge that stays OK).
+
+**Resolving an alert (Atendida / No aplica) never changes any KPI.**
+`resolver_alerta` only ever touches the `alertas` row it resolves; a pgTAP
+test (`supabase/tests/09_indicadores_lecturas.test.sql`) asserts every
+indicator's `valor`/`estado`/`actualizado_en` is byte-for-byte unchanged
+across both resolutions, and the mock adapter has the same assertion in
+`lib/domain/in-memory-floor-repository.test.ts`.
+
+The mock adapter mirrors the recovery rule (every simulated shift recovers
+every KPI, since none of `ALERTAS_NUEVO_TURNO`'s two fixed alerts link to a
+`clave` today) but does not yet reproduce the KPI-linked-reading side of
+D25: its shift alerts carry no `valor`/`indicador_clave` data to record.
+
 ## Learn More
 
 To learn more, take a look at the following resources:
