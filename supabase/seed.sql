@@ -18,6 +18,18 @@ insert into public.lineas (id, planta_id, nombre, turno) values
   ('00000000-0000-0000-0000-000000000012', '00000000-0000-0000-0000-000000000001', 'Línea 2 · Pintura', 'Turno mañana'),
   ('00000000-0000-0000-0000-000000000013', '00000000-0000-0000-0000-000000000001', 'Línea 3 · Motores', 'Turno mañana');
 
+-- E3/D28: one demo_panel control-panel row per line. The
+-- lineas_crear_panel_demo_trigger (migration 20260926000018) already inserts
+-- these automatically on every `insert into lineas`, so this statement is
+-- redundant with the trigger on a fresh database -- kept explicit anyway so
+-- the seed file stays self-describing and a future change to the trigger
+-- cannot silently leave a fresh database without its demo_panel rows.
+insert into public.demo_panel (linea_id, linea) values
+  ('00000000-0000-0000-0000-000000000011', 'Línea 1 · Chasis'),
+  ('00000000-0000-0000-0000-000000000012', 'Línea 2 · Pintura'),
+  ('00000000-0000-0000-0000-000000000013', 'Línea 3 · Motores')
+on conflict (linea_id) do nothing;
+
 -- Stations on Línea 3, matching the stations referenced by the mock alerts
 -- and simulator templates in lib/mock-data.ts.
 insert into public.estaciones (linea_id, numero, nombre) values

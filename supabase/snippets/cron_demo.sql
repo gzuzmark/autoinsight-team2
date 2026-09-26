@@ -12,13 +12,14 @@
 
 create extension if not exists pg_cron;
 
--- Add a small stream of new alerts every 2 minutes, spread across all lines
--- (p_linea_id = null -> demo_generar_alertas itself picks a random line per
--- call, see the function's own comment).
+-- Add a small stream of new alerts every 2 minutes, once PER LINE (E3: the
+-- generator is no longer called directly here -- demo_simular_turno_linea
+-- runs the exact same free-room + KPI-reading + recovery rules the removed
+-- in-app "Simular turno" button always had, per line).
 select cron.schedule(
-  'demo-generar-alertas',
+  'demo-simular-turno',
   '*/2 * * * *',
-  $$ select public.demo_generar_alertas(null, 1) $$
+  $$ select public.demo_simular_turno_linea(nombre, 1) from public.lineas $$
 );
 
 -- Auto-resolve alerts nobody has acted on for 30+ minutes, every 5 minutes.
@@ -29,11 +30,11 @@ select cron.schedule(
 );
 
 -- Pause both jobs without unscheduling them (keeps the job ids/history):
---   select cron.alter_job(job_id := (select jobid from cron.job where jobname = 'demo-generar-alertas'), active := false);
+--   select cron.alter_job(job_id := (select jobid from cron.job where jobname = 'demo-simular-turno'), active := false);
 --   select cron.alter_job(job_id := (select jobid from cron.job where jobname = 'demo-autoresolver'), active := false);
 -- Resume:
---   select cron.alter_job(job_id := (select jobid from cron.job where jobname = 'demo-generar-alertas'), active := true);
+--   select cron.alter_job(job_id := (select jobid from cron.job where jobname = 'demo-simular-turno'), active := true);
 --   select cron.alter_job(job_id := (select jobid from cron.job where jobname = 'demo-autoresolver'), active := true);
 -- Remove entirely:
---   select cron.unschedule('demo-generar-alertas');
+--   select cron.unschedule('demo-simular-turno');
 --   select cron.unschedule('demo-autoresolver');

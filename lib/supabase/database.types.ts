@@ -101,6 +101,41 @@ export type Database = {
           },
         ]
       }
+      demo_panel: {
+        Row: {
+          alertas_generadas: number | null
+          cantidad: number
+          linea: string
+          linea_id: string
+          simular_turno: boolean
+          ultima_simulacion: string | null
+        }
+        Insert: {
+          alertas_generadas?: number | null
+          cantidad?: number
+          linea: string
+          linea_id: string
+          simular_turno?: boolean
+          ultima_simulacion?: string | null
+        }
+        Update: {
+          alertas_generadas?: number | null
+          cantidad?: number
+          linea?: string
+          linea_id?: string
+          simular_turno?: boolean
+          ultima_simulacion?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "demo_panel_linea_id_fkey"
+            columns: ["linea_id"]
+            isOneToOne: true
+            referencedRelation: "lineas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       estaciones: {
         Row: {
           creada_en: string
@@ -429,6 +464,29 @@ export type Database = {
       }
       demo_simular_turno: {
         Args: { p_cantidad?: number; p_sesion_id: string }
+        Returns: {
+          creada_en: string
+          estacion_id: string | null
+          estado: Database["public"]["Enums"]["estado_alerta"]
+          id: string
+          limite: number | null
+          linea_id: string
+          resuelta_en: string | null
+          resuelta_por: string | null
+          severidad: Database["public"]["Enums"]["severidad"]
+          titulo: string
+          unidad: string | null
+          valor: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "alertas"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      demo_simular_turno_linea: {
+        Args: { p_cantidad?: number; p_linea?: string }
         Returns: {
           creada_en: string
           estacion_id: string | null

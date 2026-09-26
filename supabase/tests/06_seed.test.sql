@@ -4,7 +4,7 @@
 -- `supabase db reset` just seeded; read-only (rollback at the end undoes
 -- nothing since this file makes no writes).
 begin;
-select plan(22);
+select plan(23);
 
 select is(
   (select count(*)::int from public.plantas),
@@ -20,6 +20,11 @@ select is(
   (select count(*)::int from public.lineas),
   3,
   'exactly 3 lineas are seeded'
+);
+select is(
+  (select count(*)::int from public.demo_panel),
+  3,
+  'E3: exactly one demo_panel row per seeded linea'
 );
 select is(
   (select count(*)::int from public.usuarios),
