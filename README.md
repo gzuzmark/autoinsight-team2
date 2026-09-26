@@ -60,7 +60,7 @@ never commit `.env.local` or a real `SUPABASE_SECRET_KEY`.
 | `DATA_SOURCE` | `mock` \| `supabase` | `mock` | Selects the `FloorRepository` adapter (D19, T7). `mock` needs nothing else below and reproduces the app's existing in-memory behavior (same users/PINs, same seed alerts) with no backend running. |
 | `SUPABASE_URL` | URL | — | Required only when `DATA_SOURCE=supabase`. Read server-side only (D20) — never sent to the browser, never `NEXT_PUBLIC_*`. Local value: `supabase status -o env` after `supabase start`. |
 | `SUPABASE_SECRET_KEY` | secret | — | Required only when `DATA_SOURCE=supabase`; the `service_role`/`sb_secret` key. Same source as above. Never commit a real value. |
-| `DEMO_ENABLED` | `true` \| anything else | disabled | Enables `POST /api/demo/simular` (D23); every other value 404s the route, so the "Simular turno" button (`?demo=1`) does nothing server-side unless this is exactly `"true"`. |
+| `DEMO_ENABLED` | `true` \| anything else | disabled | Enables `POST /api/demo/simular` (D23); every other value 404s the route, so the "Simular turno" button (`?demo=1`) does nothing server-side unless this is exactly `"true"`. With Supabase it calls `demo_simular_turno`, which generates on the operator's own line and, when every alert template is already open there, first closes that line's oldest open template alerts as "No aplica" by the system (like a shift change), so the button always shows something new. |
 
 To run the app against a local Supabase stack instead of mock data:
 

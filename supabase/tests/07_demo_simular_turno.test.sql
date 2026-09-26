@@ -5,7 +5,7 @@
 -- random line per alert, so the operator's own dashboard often looked
 -- unchanged after "Simular turno".
 begin;
-select plan(6);
+select plan(9);
 
 insert into public.plantas (id, nombre) values ('11111111-1111-1111-1111-111111111111', 'Planta Test');
 insert into public.lineas (id, planta_id, nombre, turno) values
@@ -58,10 +58,30 @@ select is(
 -- Default p_cantidad is 2 ----------------------------------------------------
 insert into public.plantillas_alerta (severidad, titulo, estacion_numero, unidad, valor_min, valor_max, limite, peso)
   values ('atencion', 'Nivel de adhesivo bajo', 1, '%', 0, 100, 20, 1);
+-- K5: only 1 template is available but 2 are requested, so the oldest active
+-- template alert on the line is closed as no_aplica by the system first.
 select is(
   (select count(*)::int from public.demo_simular_turno(:'s_iniciar_sesion')),
+  2,
+  'demo_simular_turno with default p_cantidad (2) frees room on a saturated line and generates 2'
+);
+select is(
+  (select count(*)::int from public.alertas
+     where linea_id = '22222222-2222-2222-2222-222222222222'
+       and estado = 'no_aplica' and resuelta_por is null and resuelta_en is not null),
   1,
-  'demo_simular_turno with no p_cantidad generates from the remaining available template on the line'
+  'the oldest active alert was closed as no_aplica by the system'
+);
+select is(
+  (select count(*)::int from public.demo_simular_turno(:'s_iniciar_sesion', 2)),
+  2,
+  'a fully saturated line (every template active) still generates the requested alerts'
+);
+select is(
+  (select count(*)::int from public.alertas
+     where linea_id = '22222222-2222-2222-2222-222222222222' and estado = 'nueva'),
+  2,
+  'the line keeps a bounded number of active demo alerts'
 );
 
 -- anon cannot execute ---------------------------------------------------------
