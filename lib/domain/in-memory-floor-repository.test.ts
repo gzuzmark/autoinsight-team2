@@ -177,5 +177,21 @@ describe("InMemoryFloorRepository", () => {
     it("throws SessionInvalidError for an unknown session", async () => {
       await expect(repo.simular("nope")).rejects.toBeInstanceOf(SessionInvalidError)
     })
+
+    it("D26: moves every KPI one state toward ok (recovery reading)", async () => {
+      const sessionId = await repo.iniciarSesion(ANA.id, ANA.pin)
+      const before = await repo.tablero(sessionId!)
+      const fpyBefore = before.indicadores.find((i) => i.id === "fpy")
+      const dphBefore = before.indicadores.find((i) => i.id === "dph")
+      expect(fpyBefore?.estado).toBe("parar")
+      expect(dphBefore?.estado).toBe("atencion")
+
+      const after = await repo.simular(sessionId!)
+
+      expect(after.indicadores.find((i) => i.id === "fpy")?.estado).toBe("atencion")
+      expect(after.indicadores.find((i) => i.id === "dph")?.estado).toBe("ok")
+      // Scrap was already ok; recovery keeps it ok.
+      expect(after.indicadores.find((i) => i.id === "scrap")?.estado).toBe("ok")
+    })
   })
 })

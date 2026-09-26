@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { Indicador } from "@/lib/mock-data"
-import { estadoIndicador, indicadorATablero } from "@/lib/domain/indicadores"
+import { estadoIndicador, indicadorATablero, recuperarIndicador } from "@/lib/domain/indicadores"
 
 const FPY: Indicador = {
   id: "fpy",
@@ -87,3 +87,31 @@ describe("indicadorATablero", () => {
   })
 })
 
+describe("recuperarIndicador", () => {
+  it("moves a parar indicator one state toward ok, landing inside the atencion band", () => {
+    const after = recuperarIndicador(FPY, 2_000)
+    const estado = estadoIndicador(after.valor, after.mayorEsMejor, after.umbralAtencion, after.umbralParar)
+    expect(estado).toBe("atencion")
+    expect(after.actualizadoEn).toBe(2_000)
+  })
+
+  it("moves an atencion indicator one state toward ok, landing inside the ok band", () => {
+    const after = recuperarIndicador(DPH, 2_000)
+    const estado = estadoIndicador(after.valor, after.mayorEsMejor, after.umbralAtencion, after.umbralParar)
+    expect(estado).toBe("ok")
+    expect(after.actualizadoEn).toBe(2_000)
+  })
+
+  it("leaves an ok indicator ok, still refreshing actualizadoEn", () => {
+    const after = recuperarIndicador(SCRAP, 2_000)
+    const estado = estadoIndicador(after.valor, after.mayorEsMejor, after.umbralAtencion, after.umbralParar)
+    expect(estado).toBe("ok")
+    expect(after.actualizadoEn).toBe(2_000)
+  })
+
+  it("never lets a lower-is-better valor go negative", () => {
+    const nearZero: Indicador = { ...DPH, valor: 0.01, umbralAtencion: 4, umbralParar: 6 }
+    const after = recuperarIndicador(nearZero, 2_000)
+    expect(after.valor).toBeGreaterThanOrEqual(0)
+  })
+})

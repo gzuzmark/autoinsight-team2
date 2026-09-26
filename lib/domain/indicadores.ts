@@ -46,3 +46,35 @@ export function indicadorATablero(indicador: Indicador): IndicadorTablero {
     ),
   }
 }
+
+function redondear(valor: number): number {
+  return Math.round(valor * 100) / 100
+}
+
+/**
+ * D26: a "recovery reading" moves an indicator ONE state toward ok, with a
+ * value inside the new (better) band:
+ *   - parar -> a value inside the atencion band (the midpoint between the
+ *     parar and atencion thresholds).
+ *   - atencion -> a value just inside the ok band.
+ *   - ok -> stays ok (a small, direction-safe nudge; still refreshes
+ *     `actualizadoEn` so "desactualizado" clears).
+ * Never lets a lower-is-better valor go negative.
+ */
+export function recuperarIndicador(indicador: Indicador, ahora: number): Indicador {
+  const { valor, mayorEsMejor, umbralAtencion, umbralParar } = indicador
+  const estadoActual = estadoIndicador(valor, mayorEsMejor, umbralAtencion, umbralParar)
+
+  let nuevoValor: number
+  if (estadoActual === "parar") {
+    nuevoValor = (umbralParar + umbralAtencion) / 2
+  } else if (estadoActual === "atencion") {
+    const paso = Math.max(Math.abs(umbralAtencion) * 0.02, 0.1)
+    nuevoValor = mayorEsMejor ? umbralAtencion + paso : Math.max(umbralAtencion - paso, 0)
+  } else {
+    const paso = Math.max(Math.abs(valor) * 0.01, 0.05)
+    nuevoValor = mayorEsMejor ? valor + paso : Math.max(valor - paso, 0)
+  }
+
+  return { ...indicador, valor: redondear(nuevoValor), actualizadoEn: ahora }
+}
