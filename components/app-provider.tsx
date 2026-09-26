@@ -1,24 +1,19 @@
 "use client"
 
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react"
-import {
-  activeAlerts,
-  attendAlert,
-  changesSinceLastVisit,
-  dismissAlert,
-  mergeShiftAlerts,
-  newSinceVisit,
-} from "@/lib/domain/alerts"
-import {
-  ALERTAS_INICIALES,
-  ALERTAS_NUEVO_TURNO,
-  ordenarAlertas,
-  type Alerta,
-  type Usuario,
-} from "@/lib/mock-data"
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
+import { api, type LoginResult } from "@/lib/api/client"
+import { derivarVista } from "@/lib/domain/tablero-view"
+import type { IndicadorTablero, Linea, Planta, Tablero, UsuarioLogin } from "@/lib/domain/floor-repository"
+import type { Alerta } from "@/lib/mock-data"
 
 type AppState = {
-  usuario: Usuario | null
+  /** null while the initial GET /api/usuarios is in flight. */
+  usuarios: UsuarioLogin[] | null
+  usuariosError: string | null
+  usuario: UsuarioLogin | null
+  planta: Planta | null
+  linea: Linea | null
+  indicadores: IndicadorTablero[]
   alertas: Alerta[]
   alertasActivas: Alerta[]
   cambiosDesdeUltimaVisita: Alerta[]
@@ -26,7 +21,10 @@ type AppState = {
   esPrimeraVisita: boolean
   ultimoLogoutTs: number | null
   ultimaActualizacion: number | null
-  ingresar: (usuario: Usuario) => void
+  /** Set only when a background refresh (resolve/simulate) fails; the
+   * dashboard keeps showing the last good tablero underneath. */
+  tableroError: string | null
+  ingresar: (usuarioId: string, pin: string) => Promise<LoginResult>
   salir: () => void
   marcarAtendida: (id: string) => void
   marcarNoAplica: (id: string) => void
@@ -36,78 +34,78 @@ type AppState = {
 const Ctx = createContext<AppState | null>(null)
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [usuario, setUsuario] = useState<Usuario | null>(null)
-  const [alertas, setAlertas] = useState<Alerta[]>(() => ordenarAlertas(ALERTAS_INICIALES))
-  // Ids marcados como "nuevos" al ingresar o al simular un cambio de turno
-  // (F1): NO es la lista final a mostrar. `cambiosDesdeUltimaVisita` se
-  // deriva de esto filtrando contra las alertas activas actuales, así que
-  // un id sigue en `nuevosIds` incluso después de atender/marcar no aplica
-  // esa alerta, pero desaparece del resultado visible automáticamente.
-  const [nuevosIds, setNuevosIds] = useState<string[]>([])
-  const [esPrimeraVisita, setEsPrimeraVisita] = useState(true)
-  const [ultimoLogoutTs, setUltimoLogoutTs] = useState<number | null>(null)
-  const [ultimaActualizacion, setUltimaActualizacion] = useState<number | null>(null)
+  const [usuarios, setUsuarios] = useState<UsuarioLogin[] | null>(null)
+  const [usuariosError, setUsuariosError] = useState<string | null>(null)
+  const [tablero, setTablero] = useState<Tablero | null>(null)
+  const [tableroError, setTableroError] = useState<string | null>(null)
 
-  // Baseline por usuario: ids vistos y hora de su último cierre de sesión.
-  // No se persiste entre recargas de página (estado en memoria del cliente).
-  const vistoPorUsuario = useRef<Record<string, string[]>>({})
-  const logoutPorUsuario = useRef<Record<string, number>>({})
+  useEffect(() => {
+    let cancelado = false
+    api.usuarios().then(
+      (u) => {
+        if (!cancelado) setUsuarios(u)
+      },
+      () => {
+        if (!cancelado) setUsuariosError("No se pudo cargar la lista de personas.")
+      },
+    )
+    return () => {
+      cancelado = true
+    }
+  }, [])
 
-  const alertasActivas = useMemo(() => activeAlerts(alertas), [alertas])
-  const nuevosIdsSet = useMemo(() => new Set(nuevosIds), [nuevosIds])
-  const cambiosDesdeUltimaVisita = useMemo(
-    () => newSinceVisit(alertasActivas, nuevosIdsSet),
-    [alertasActivas, nuevosIdsSet],
-  )
+  const refrescarTablero = useCallback(async () => {
+    const t = await api.tablero()
+    setTablero(t)
+    setTableroError(null)
+  }, [])
 
   const ingresar = useCallback(
-    (u: Usuario) => {
-      const vistoAntes = vistoPorUsuario.current[u.id]
-      const primeraVisita = vistoAntes === undefined
-      setNuevosIds(changesSinceLastVisit(alertas, vistoAntes).map((a) => a.id))
-      setEsPrimeraVisita(primeraVisita)
-      setUltimoLogoutTs(primeraVisita ? null : (logoutPorUsuario.current[u.id] ?? null))
-      setUltimaActualizacion(Date.now())
-      setUsuario(u)
+    async (usuarioId: string, pin: string): Promise<LoginResult> => {
+      const resultado = await api.login(usuarioId, pin)
+      if (resultado.ok) {
+        await refrescarTablero()
+      }
+      return resultado
     },
-    [alertas],
+    [refrescarTablero],
   )
 
   const salir = useCallback(() => {
-    if (usuario) {
-      vistoPorUsuario.current[usuario.id] = alertasActivas.map((a) => a.id)
-      logoutPorUsuario.current[usuario.id] = Date.now()
-    }
-    setUsuario(null)
-    setNuevosIds([])
-  }, [usuario, alertasActivas])
+    setTablero(null)
+    setTableroError(null)
+    void api.logout()
+  }, [])
 
   const marcarAtendida = useCallback((id: string) => {
-    setAlertas((prev) => attendAlert(prev, id))
+    api.resolver(id, "atendida").then(setTablero, () => setTableroError("No se pudo actualizar la alerta."))
   }, [])
 
   const marcarNoAplica = useCallback((id: string) => {
-    setAlertas((prev) => dismissAlert(prev, id))
+    api.resolver(id, "no_aplica").then(setTablero, () => setTableroError("No se pudo actualizar la alerta."))
   }, [])
 
   const simularCambioTurno = useCallback(() => {
-    const { alerts, added } = mergeShiftAlerts(alertas, ALERTAS_NUEVO_TURNO, Date.now())
-    if (added.length > 0) {
-      setNuevosIds((prev) => [...prev, ...added.map((a) => a.id)])
-    }
-    setUltimaActualizacion(Date.now())
-    setAlertas(alerts)
-  }, [alertas])
+    api.simular().then(setTablero, () => setTableroError("No se pudo simular el cambio de turno."))
+  }, [])
+
+  const vista = useMemo(() => derivarVista(tablero), [tablero])
 
   const value: AppState = {
-    usuario,
-    alertas,
-    alertasActivas,
-    cambiosDesdeUltimaVisita,
-    totalNuevosDesdeVisita: nuevosIds.length,
-    esPrimeraVisita,
-    ultimoLogoutTs,
-    ultimaActualizacion,
+    usuarios,
+    usuariosError,
+    usuario: tablero?.usuario ?? null,
+    planta: tablero?.planta ?? null,
+    linea: tablero?.linea ?? null,
+    indicadores: tablero?.indicadores ?? [],
+    alertas: tablero?.alertas ?? [],
+    alertasActivas: vista.alertasActivas,
+    cambiosDesdeUltimaVisita: vista.cambiosDesdeUltimaVisita,
+    totalNuevosDesdeVisita: vista.totalNuevosDesdeVisita,
+    esPrimeraVisita: vista.esPrimeraVisita,
+    ultimoLogoutTs: vista.ultimoLogoutTs,
+    ultimaActualizacion: tablero?.ultimaActualizacion ?? null,
+    tableroError,
     ingresar,
     salir,
     marcarAtendida,

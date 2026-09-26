@@ -1,8 +1,14 @@
 "use client"
 
-import { USUARIOS, type Usuario } from "@/lib/mock-data"
+import type { UsuarioLogin } from "@/lib/domain/floor-repository"
 
-export function LoginAvatars({ onSeleccionar }: { onSeleccionar: (u: Usuario) => void }) {
+export function LoginAvatars({
+  usuarios,
+  onSeleccionar,
+}: {
+  usuarios: UsuarioLogin[]
+  onSeleccionar: (u: UsuarioLogin) => void
+}) {
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-10 px-10">
       <div className="text-center">
@@ -15,7 +21,7 @@ export function LoginAvatars({ onSeleccionar }: { onSeleccionar: (u: Usuario) =>
       </div>
 
       <ul className="grid grid-cols-3 gap-6">
-        {USUARIOS.map((u) => (
+        {usuarios.map((u) => (
           <li key={u.id}>
             <button
               type="button"

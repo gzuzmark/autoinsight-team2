@@ -1,10 +1,10 @@
-import { INDICADORES } from "@/lib/mock-data"
+import type { IndicadorTablero } from "@/lib/domain/floor-repository"
 import { ESTILOS } from "@/lib/status"
 
-export function IndicatorsRow() {
+export function IndicatorsRow({ indicadores }: { indicadores: IndicadorTablero[] }) {
   return (
     <div className="grid grid-cols-3 gap-4">
-      {INDICADORES.map((ind) => {
+      {indicadores.map((ind) => {
         const e = ESTILOS[ind.estado]
         const Icono = e.Icono
         return (

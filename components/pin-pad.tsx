@@ -2,30 +2,36 @@
 
 import { useState } from "react"
 import { ArrowLeft, Delete } from "lucide-react"
-import type { Usuario } from "@/lib/mock-data"
+import type { UsuarioLogin } from "@/lib/domain/floor-repository"
 
 export function PinPad({
   usuario,
-  onConfirmar,
+  onIngresar,
   onVolver,
 }: {
-  usuario: Usuario
-  onConfirmar: () => void
+  usuario: UsuarioLogin
+  /** Verifies the PIN server-side (T9: the client never knows a PIN, it
+   * only relays it once) and resolves with the outcome. `mensaje` is shown
+   * verbatim when present (e.g. the 429 throttle message); otherwise the
+   * generic "PIN incorrecto" text is used. */
+  onIngresar: (pin: string) => Promise<{ ok: boolean; mensaje?: string }>
   onVolver: () => void
 }) {
   const [pin, setPin] = useState("")
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [enviando, setEnviando] = useState(false)
 
-  function agregar(digito: string) {
-    if (pin.length >= 4) return
+  async function agregar(digito: string) {
+    if (enviando || pin.length >= 4) return
     const siguiente = pin + digito
-    setError(false)
+    setError(null)
     if (siguiente.length === 4) {
-      if (siguiente === usuario.pin) {
-        setPin(siguiente)
-        onConfirmar()
-      } else {
-        setError(true)
+      setPin(siguiente)
+      setEnviando(true)
+      const resultado = await onIngresar(siguiente)
+      setEnviando(false)
+      if (!resultado.ok) {
+        setError(resultado.mensaje ?? "PIN incorrecto, intenta de nuevo")
         setPin("")
       }
       return
@@ -34,7 +40,8 @@ export function PinPad({
   }
 
   function borrar() {
-    setError(false)
+    if (enviando) return
+    setError(null)
     setPin((p) => p.slice(0, -1))
   }
 
@@ -72,7 +79,7 @@ export function PinPad({
       </div>
 
       <p className="h-8 text-2xl font-bold text-[#c1121f]" role="alert">
-        {error ? "PIN incorrecto, intenta de nuevo" : ""}
+        {error ?? ""}
       </p>
 
       <div className="grid grid-cols-3 gap-4">

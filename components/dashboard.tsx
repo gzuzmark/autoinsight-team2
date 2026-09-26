@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { LogOut } from "lucide-react"
 import { focusTargetAfterResolve } from "@/lib/domain/alerts"
-import { formatearHora, PLANTA_NOMBRE, type Alerta, type Usuario } from "@/lib/mock-data"
+import { formatearHora, type Alerta } from "@/lib/mock-data"
 import { useApp } from "./app-provider"
 import { IndicatorsRow } from "./indicators-row"
 import { AlertStack } from "./alert-stack"
@@ -11,8 +11,12 @@ import { AlertDetail } from "./alert-detail"
 import { SinceLastVisit } from "./since-last-visit"
 import { DemoControls } from "./demo-controls"
 
-export function Dashboard({ usuario, demo }: { usuario: Usuario; demo: boolean }) {
+export function Dashboard({ demo }: { demo: boolean }) {
   const {
+    usuario,
+    planta,
+    linea,
+    indicadores,
     alertasActivas,
     salir,
     marcarAtendida,
@@ -22,7 +26,14 @@ export function Dashboard({ usuario, demo }: { usuario: Usuario; demo: boolean }
     esPrimeraVisita,
     ultimoLogoutTs,
     ultimaActualizacion,
+    tableroError,
   } = useApp()
+
+  // Dashboard only renders once AppProvider has a usuario (see Shell in
+  // app/page.tsx), so planta/linea/usuario are always set here; the
+  // fallbacks only satisfy the type checker against a theoretically-null
+  // AppState field.
+  if (!usuario || !planta || !linea) return null
   const [abierta, setAbierta] = useState<Alerta | null>(null)
   const [montado, setMontado] = useState(false)
   const disparadorRef = useRef<HTMLButtonElement | null>(null)
@@ -97,10 +108,10 @@ export function Dashboard({ usuario, demo }: { usuario: Usuario; demo: boolean }
               tabIndex={-1}
               className="whitespace-nowrap text-2xl font-black text-neutral-900 outline-none"
             >
-              {PLANTA_NOMBRE}
+              {planta.nombre}
             </h1>
-            <span className="whitespace-nowrap text-2xl font-bold text-neutral-900">Línea 3 · Motores</span>
-            <span className="whitespace-nowrap text-2xl font-semibold text-neutral-900">Turno mañana</span>
+            <span className="whitespace-nowrap text-2xl font-bold text-neutral-900">{linea.nombre}</span>
+            <span className="whitespace-nowrap text-2xl font-semibold text-neutral-900">{linea.turno}</span>
             {montado && ultimaActualizacion !== null && (
               <span className="whitespace-nowrap text-2xl font-semibold text-neutral-900">
                 Última actualización {formatearHora(ultimaActualizacion)}
@@ -137,7 +148,13 @@ export function Dashboard({ usuario, demo }: { usuario: Usuario; demo: boolean }
           ultimoLogoutTs={ultimoLogoutTs}
         />
 
-        <IndicatorsRow />
+        {tableroError && (
+          <div className="flex shrink-0 items-center rounded-2xl border-4 border-neutral-900 bg-white px-5 py-2">
+            <p className="text-2xl font-bold text-neutral-900">{tableroError}</p>
+          </div>
+        )}
+
+        <IndicatorsRow indicadores={indicadores} />
 
         <AlertStack alertas={alertasActivas} onAbrir={abrir} nuevasIds={nuevasIds} />
       </div>
