@@ -1,6 +1,6 @@
 -- Schema tests: tables, columns, enums, constraints, FKs, indexes.
 begin;
-select plan(46);
+select plan(54);
 
 -- Fixtures: a real planta/linea so FK constraints never mask the CHECK
 -- constraints under test below.
@@ -133,6 +133,67 @@ select lives_ok(
   $$ insert into public.alertas (linea_id, severidad, titulo, estado, resuelta_en)
      values ('22222222-2222-2222-2222-222222222222', 'ok', 'auto resuelta', 'no_aplica', now()) $$,
   'alertas: no_aplica with resuelta_por null (system) is allowed'
+);
+
+-- H7: every branch of the resolution CHECK constraint ----------------------
+insert into public.usuarios (id, linea_id, nombre, iniciales, color)
+  values ('66666666-6666-6666-6666-666666666666', '22222222-2222-2222-2222-222222222222', 'Resolutor', 'RS', '#123456');
+
+select throws_ok(
+  format($$ insert into public.alertas (linea_id, severidad, titulo, estado, resuelta_por)
+     values ('22222222-2222-2222-2222-222222222222', 'ok', 'nueva con resuelta_por', 'nueva', '%s') $$,
+     '66666666-6666-6666-6666-666666666666'),
+  '23514',
+  null,
+  'alertas: estado nueva with resuelta_por set is rejected'
+);
+select throws_ok(
+  $$ insert into public.alertas (linea_id, severidad, titulo, estado, resuelta_en)
+     values ('22222222-2222-2222-2222-222222222222', 'ok', 'nueva con resuelta_en', 'nueva', now()) $$,
+  '23514',
+  null,
+  'alertas: estado nueva with resuelta_en set is rejected'
+);
+select lives_ok(
+  format($$ insert into public.alertas (linea_id, severidad, titulo, estado, resuelta_por, resuelta_en)
+     values ('22222222-2222-2222-2222-222222222222', 'ok', 'atendida completa', 'atendida', '%s', now()) $$,
+     '66666666-6666-6666-6666-666666666666'),
+  'alertas: estado atendida with both resuelta_por and resuelta_en set is allowed'
+);
+select throws_ok(
+  $$ insert into public.alertas (linea_id, severidad, titulo, estado)
+     values ('22222222-2222-2222-2222-222222222222', 'ok', 'no_aplica sin resuelta_en', 'no_aplica') $$,
+  '23514',
+  null,
+  'alertas: estado no_aplica without resuelta_en is rejected'
+);
+
+-- H4: partial unique index dedupes active alerts by (linea_id, titulo) -----
+select has_index(
+  'public', 'alertas', 'alertas_linea_titulo_nueva_uidx',
+  'partial unique index on active (linea_id, titulo) exists'
+);
+insert into public.alertas (linea_id, severidad, titulo, estado)
+  values ('22222222-2222-2222-2222-222222222222', 'ok', 'titulo duplicado', 'nueva');
+select throws_ok(
+  $$ insert into public.alertas (linea_id, severidad, titulo, estado)
+     values ('22222222-2222-2222-2222-222222222222', 'ok', 'titulo duplicado', 'nueva') $$,
+  '23505',
+  null,
+  'a second active alert with the same (linea_id, titulo) is rejected'
+);
+select lives_ok(
+  $$ insert into public.alertas (linea_id, severidad, titulo, estado, resuelta_en)
+     values ('22222222-2222-2222-2222-222222222222', 'ok', 'titulo duplicado', 'no_aplica', now()) $$,
+  'a resolved alert with the same titulo does not collide with the partial index'
+);
+
+-- H6: resuelta_por is ON DELETE RESTRICT, not SET NULL ----------------------
+select throws_ok(
+  format($$ delete from public.usuarios where id = '%s' $$, '66666666-6666-6666-6666-666666666666'),
+  '23503',
+  null,
+  'deleting a user who resolved an alert is rejected by the FK, not silently nulled out'
 );
 
 select * from finish();
