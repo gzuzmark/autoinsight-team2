@@ -9,6 +9,20 @@ import type { Resolucion, Tablero, UsuarioLogin } from "@/lib/domain/floor-repos
 
 export type LoginResult = { ok: true } | { ok: false; status: number; message: string }
 
+/** E4: carries the HTTP status alongside the message, so a caller (the
+ * polling tick, in particular) can tell a 401 (expired/invalid session --
+ * "return to login cleanly") apart from any other failure (transient
+ * network/server error -- keep showing the last good tablero). */
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message)
+    this.name = "ApiError"
+  }
+}
+
 async function readErrorMessage(res: Response, fallback: string): Promise<string> {
   try {
     const body: unknown = await res.json()
@@ -23,7 +37,7 @@ async function readErrorMessage(res: Response, fallback: string): Promise<string
 
 async function getJson<T>(url: string, fallbackError: string): Promise<T> {
   const res = await fetch(url)
-  if (!res.ok) throw new Error(await readErrorMessage(res, fallbackError))
+  if (!res.ok) throw new ApiError(res.status, await readErrorMessage(res, fallbackError))
   return res.json() as Promise<T>
 }
 
@@ -33,7 +47,7 @@ async function postJson<T>(url: string, body: unknown, fallbackError: string): P
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   })
-  if (!res.ok) throw new Error(await readErrorMessage(res, fallbackError))
+  if (!res.ok) throw new ApiError(res.status, await readErrorMessage(res, fallbackError))
   return res.json() as Promise<T>
 }
 

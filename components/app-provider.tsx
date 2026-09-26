@@ -1,7 +1,8 @@
 "use client"
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
-import { api, type LoginResult } from "@/lib/api/client"
+import { api, ApiError, type LoginResult } from "@/lib/api/client"
+import { createPoller } from "@/lib/api/poller"
 import { derivarVista } from "@/lib/domain/tablero-view"
 import type { IndicadorTablero, Linea, Planta, Tablero, UsuarioLogin } from "@/lib/domain/floor-repository"
 import type { Alerta } from "@/lib/mock-data"
@@ -83,6 +84,54 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const marcarNoAplica = useCallback((id: string) => {
     api.resolver(id, "no_aplica").then(setTablero, () => setTableroError("No se pudo actualizar la alerta."))
   }, [])
+
+  // D29/E4: auto-refresh the tablero every 15s while logged in and the page
+  // is visible, instead of an ACTUALIZAR button. `estaLogueado` is a
+  // primitive boolean, not `tablero` itself: `tablero` gets a new object
+  // reference on every refresh, but the effect must only re-run when going
+  // from logged out to logged in (or back) -- not on every tick -- or the
+  // interval would never survive long enough to fire.
+  const estaLogueado = tablero !== null
+  useEffect(() => {
+    if (!estaLogueado) return
+
+    const poller = createPoller({
+      intervalMs: 15_000,
+      isVisible: () => document.visibilityState === "visible",
+      onTick: async () => {
+        try {
+          const t = await api.tablero()
+          setTablero(t)
+          setTableroError(null)
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 401) {
+            // An expired/invalid session found during a background poll
+            // returns to login cleanly: no error banner, no stale
+            // dashboard left on screen.
+            setTablero(null)
+            setTableroError(null)
+            return
+          }
+          // Any other failure keeps showing the last good tablero (no
+          // flicker, no loading state) with a background error banner,
+          // same as marcarAtendida/marcarNoAplica already do.
+          setTableroError("No se pudo actualizar el tablero.")
+        }
+      },
+    })
+
+    poller.start()
+
+    function onVisibilityChange() {
+      if (document.visibilityState === "visible") poller.notifyVisible()
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange)
+
+    return () => {
+      poller.stop()
+      document.removeEventListener("visibilitychange", onVisibilityChange)
+    }
+  }, [estaLogueado])
 
   const vista = useMemo(() => derivarVista(tablero), [tablero])
 

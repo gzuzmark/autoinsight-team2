@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { api } from "@/lib/api/client"
+import { api, ApiError } from "@/lib/api/client"
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -92,6 +92,13 @@ describe("api.tablero", () => {
   it("throws on 401", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ error: "x" }, 401)))
     await expect(api.tablero()).rejects.toThrow()
+  })
+
+  it("E4: throws an ApiError carrying the HTTP status, so a poller can tell a 401 apart", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ error: "Sesión inválida." }, 401)))
+    await expect(api.tablero()).rejects.toMatchObject(
+      new ApiError(401, "Sesión inválida."),
+    )
   })
 })
 
