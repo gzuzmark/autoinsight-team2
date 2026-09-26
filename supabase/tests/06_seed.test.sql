@@ -4,7 +4,7 @@
 -- `supabase db reset` just seeded; read-only (rollback at the end undoes
 -- nothing since this file makes no writes).
 begin;
-select plan(19);
+select plan(22);
 
 select is(
   (select count(*)::int from public.plantas),
@@ -89,24 +89,47 @@ select ok(
   'Fer Luna'' seeded PIN hash verifies against 8642'
 );
 
--- Línea 3's KPIs match lib/mock-data.ts INDICADORES exactly.
+-- Línea 3's KPIs match lib/mock-data.ts INDICADORES exactly. J5(e): compare
+-- valor (numeric) and estado (the public.severidad enum -- indicadores'
+-- estado column reuses it, distinct from alertas' severidad) as their own
+-- typed values instead of a stringified row, so e.g. a numeric-vs-text or
+-- enum-label mismatch fails on the actual value, not on incidental
+-- formatting of the composite type's text representation.
 select is(
-  (select (valor, estado)::text from public.indicadores
+  (select valor from public.indicadores
      where linea_id = '00000000-0000-0000-0000-000000000013' and clave = 'fpy'),
-  '(88.4,parar)',
-  'Línea 3 FPY is 88.4 / parar, matching lib/mock-data.ts'
+  88.4::numeric,
+  'Línea 3 FPY valor is 88.4, matching lib/mock-data.ts'
 );
 select is(
-  (select (valor, estado)::text from public.indicadores
+  (select estado from public.indicadores
+     where linea_id = '00000000-0000-0000-0000-000000000013' and clave = 'fpy'),
+  'parar'::public.severidad,
+  'Línea 3 FPY estado is parar, matching lib/mock-data.ts'
+);
+select is(
+  (select valor from public.indicadores
      where linea_id = '00000000-0000-0000-0000-000000000013' and clave = 'dph'),
-  '(5,atencion)',
-  'Línea 3 Defectos / hora is 5 / atencion, matching lib/mock-data.ts'
+  5::numeric,
+  'Línea 3 Defectos / hora valor is 5, matching lib/mock-data.ts'
 );
 select is(
-  (select (valor, estado)::text from public.indicadores
+  (select estado from public.indicadores
+     where linea_id = '00000000-0000-0000-0000-000000000013' and clave = 'dph'),
+  'atencion'::public.severidad,
+  'Línea 3 Defectos / hora estado is atencion, matching lib/mock-data.ts'
+);
+select is(
+  (select valor from public.indicadores
      where linea_id = '00000000-0000-0000-0000-000000000013' and clave = 'scrap'),
-  '(1.6,ok)',
-  'Línea 3 Scrap is 1.6 / ok, matching lib/mock-data.ts'
+  1.6::numeric,
+  'Línea 3 Scrap valor is 1.6, matching lib/mock-data.ts'
+);
+select is(
+  (select estado from public.indicadores
+     where linea_id = '00000000-0000-0000-0000-000000000013' and clave = 'scrap'),
+  'ok'::public.severidad,
+  'Línea 3 Scrap estado is ok, matching lib/mock-data.ts'
 );
 
 select * from finish();

@@ -115,6 +115,15 @@ Cutover to the remote project (`urxhacdnqgllscijffmh`) — applying these
 migrations there, seeding it, and enabling cron — is a separate, explicitly
 authorized step (B8), not part of local development.
 
+`alertas_linea_titulo_nueva_uidx` (migration
+`20260925000005_demo_alertas_dedupe_index.sql`) assumes a clean database at
+the point it is created: it only prevents *future* duplicate active alerts
+per `(linea_id, titulo)`, it cannot retroactively deduplicate rows that
+already violate it. B8 cutover must apply migrations to a database with no
+pre-existing active-alert duplicates on that pair (true for the clean
+rewrite this schema ships as); applying it to a database that already has
+such duplicates fails the migration outright (unique index creation).
+
 ## Design decisions for the plant floor
 
 This UI was ported from an office-style quality dashboard to run on a tablet

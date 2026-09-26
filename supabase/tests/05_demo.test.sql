@@ -1,7 +1,7 @@
 -- demo_generar_alertas / demo_autoresolver tests: weighted inserts, dedupe,
 -- auto-resolve by age.
 begin;
-select plan(11);
+select plan(12);
 
 -- Isolate from supabase/seed.sql: clear any pre-existing active alerts so
 -- demo_autoresolver's count below reflects only this test's own data, and
@@ -47,8 +47,14 @@ select ok(
   'the generated alert valor falls within the template range'
 );
 
--- Dedupe: a second call skips inserting the same active titulo again -------
-select public.demo_generar_alertas('22222222-2222-2222-2222-222222222222'::uuid, 1);
+-- J5(a): dedupe conflict path -- a second call, with the template's titulo
+-- already active on the line, returns zero rows (function-level, not just
+-- the persisted count) and leaves the active count unchanged -------------
+select is(
+  (select count(*)::int from public.demo_generar_alertas('22222222-2222-2222-2222-222222222222'::uuid, 1)),
+  0,
+  'demo_generar_alertas returns zero rows when the template''s titulo is already active on the line'
+);
 select is(
   (select count(*)::int from public.alertas
      where linea_id = '22222222-2222-2222-2222-222222222222' and titulo = 'Paro de línea por fuga de aire'),

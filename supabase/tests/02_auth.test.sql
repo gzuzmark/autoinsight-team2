@@ -1,6 +1,6 @@
 -- Auth tests: iniciar_sesion success/failure/lockout/reset, session expiry.
 begin;
-select plan(46);
+select plan(47);
 
 insert into public.plantas (id, nombre) values ('11111111-1111-1111-1111-111111111111', 'Planta Test');
 insert into public.lineas (id, planta_id, nombre, turno)
@@ -87,6 +87,10 @@ insert into public.usuarios (id, linea_id, nombre, iniciales, color)
 insert into public.usuarios_pin (usuario_id, pin_hash)
   values ('77777777-7777-7777-7777-777777777777', extensions.crypt('5555', extensions.gen_salt('bf')));
 select public.iniciar_sesion('77777777-7777-7777-7777-777777777777', '5555') \gset deact_
+-- J5(d): assert the login actually succeeded before relying on :'deact_iniciar_sesion'
+-- below -- a null session id here would otherwise make the throws_ok call
+-- format('%s', null), silently testing the wrong thing.
+select isnt(:'deact_iniciar_sesion'::uuid, null, 'the login before deactivation succeeds');
 update public.usuarios set activo = false where id = '77777777-7777-7777-7777-777777777777';
 select throws_ok(
   format($$ select public.tablero('%s') $$, :'deact_iniciar_sesion'),
