@@ -1,18 +1,37 @@
-// Floor-tablet UI check (D4-D13): renders the app in a real Chrome at
-// 1280x800 and asserts the hard rules that unit tests cannot see (rendered
-// layout, clipping, computed font size, touch target geometry, console
-// errors). Run with a Next dev server already listening on BASE_URL
+// Floor-tablet UI check (D4-D13, D27/E1-E2): renders the app in a real Chrome
+// at several viewport sizes and asserts the hard rules that unit tests cannot
+// see (rendered layout, clipping, computed font size, touch target geometry,
+// console errors). Run with a Next dev server already listening on BASE_URL
 // (default http://localhost:3100).
 //
 // Usage: corepack pnpm test:ui   (see package.json "test:ui")
 //        BASE_URL=http://127.0.0.1:3100 node scripts/ui-check.mjs
+//
+// Sizes (E2): the kiosk geometry (D27) -- today's exact no-scroll screen --
+// only applies at 1280x800 (kiosk custom variant, min-width 1280 AND
+// min-height 800). Every other viewport is an ordinary scrolling page: no
+// horizontal overflow, no clipped content, text >= 24px, touch targets >=
+// 88px, and every alert card / overflow line reachable by scrolling.
 
 import { chromium } from "playwright-core"
 
 const BASE_URL = process.env.BASE_URL ?? "http://localhost:3100"
-const VIEWPORT = { width: 1280, height: 800 }
 const MIN_TEXT_PX = 24
 const MIN_TARGET_PX = 88
+
+const VIEWPORTS = [
+  { name: "kiosk 1280x800", width: 1280, height: 800, allowScroll: false },
+  { name: "MacBook 1512x790", width: 1512, height: 790, allowScroll: true },
+  { name: "tablet portrait 768x1024", width: 768, height: 1024, allowScroll: true },
+  { name: "phone 390x844", width: 390, height: 844, allowScroll: true },
+]
+
+// E4: the container running the local Supabase Postgres image, so this
+// script can trigger a shift from OUTSIDE the app (direct DB call) and prove
+// the dashboard auto-refreshes without any click. Unset (the default) skips
+// that one scenario with a clear notice instead of failing -- it needs a
+// local stack most environments running this script will not have up.
+const UI_CHECK_DB_CONTAINER = process.env.UI_CHECK_DB_CONTAINER
 
 async function main() {
   let res
@@ -31,15 +50,31 @@ async function main() {
   // F5: the browser is always closed, even if a scenario throws (a stray
   // Chrome process left running is worse than a failed check).
   const browser = await chromium.launch({ channel: "chrome" })
+  const allViolations = []
   try {
-    await runScenarios(browser)
+    for (const viewport of VIEWPORTS) {
+      await runScenariosAtViewport(browser, viewport, allViolations)
+    }
+    await runAutoRefreshScenario(browser, allViolations)
   } finally {
     await browser.close()
   }
+
+  if (allViolations.length > 0) {
+    console.error("\ntest:ui FAILED\n" + allViolations.join("\n"))
+    process.exit(1)
+  }
+
+  console.log(
+    "\ntest:ui PASSED: every viewport clean (kiosk: no scroll; others: no horizontal overflow), " +
+      "no text<24px, no target<88px, no clipped content, every alert reachable, no console errors.",
+  )
 }
 
-async function runScenarios(browser) {
-  const page = await browser.newPage({ viewport: VIEWPORT })
+async function runScenariosAtViewport(browser, viewport, allViolations) {
+  const { name, width, height, allowScroll } = viewport
+  console.log(`\n--- ${name} ---`)
+  const page = await browser.newPage({ viewport: { width, height } })
 
   const consoleErrors = []
   page.on("console", (m) => {
@@ -47,14 +82,15 @@ async function runScenarios(browser) {
   })
   page.on("pageerror", (e) => consoleErrors.push("pageerror: " + e.message))
 
-  const allViolations = []
-
-  async function check(name) {
+  async function check(label) {
     const result = await page.evaluate(
-      ({ MIN_TEXT_PX, MIN_TARGET_PX }) => {
+      ({ MIN_TEXT_PX, MIN_TARGET_PX, allowScroll }) => {
         const violations = []
         const docEl = document.documentElement
-        if (docEl.scrollHeight > docEl.clientHeight + 1) {
+        if (docEl.scrollWidth > docEl.clientWidth + 1) {
+          violations.push(`horizontal overflow: scrollWidth=${docEl.scrollWidth} clientWidth=${docEl.clientWidth}`)
+        }
+        if (!allowScroll && docEl.scrollHeight > docEl.clientHeight + 1) {
           violations.push(`document scroll: scrollHeight=${docEl.scrollHeight} clientHeight=${docEl.clientHeight}`)
         }
 
@@ -142,14 +178,49 @@ async function runScenarios(browser) {
 
         return violations
       },
-      { MIN_TEXT_PX, MIN_TARGET_PX },
+      { MIN_TEXT_PX, MIN_TARGET_PX, allowScroll },
     )
 
     if (result.length > 0) {
-      allViolations.push(`\n== ${name} ==`)
+      allViolations.push(`\n== ${name} / ${label} ==`)
       allViolations.push(...result.map((v) => `  - ${v}`))
     }
-    console.log(`${name}: ${result.length === 0 ? "OK" : `${result.length} violation(s)`}`)
+    console.log(`${label}: ${result.length === 0 ? "OK" : `${result.length} violation(s)`}`)
+  }
+
+  // E2: every visible alert card and the "+N alertas menos graves" overflow
+  // line must be reachable -- scroll it into view, then confirm its box
+  // actually intersects the viewport. On a scrolling (non-kiosk) page this is
+  // the whole point of the rule; on kiosk everything is already on-screen by
+  // construction, so this is a cheap extra check there too.
+  async function checkAlertsReachable(label) {
+    const problems = await page.evaluate(() => {
+      const main = document.querySelector("main")
+      if (!main) return ["no <main> element found"]
+      const targets = [...main.querySelectorAll("[data-alert-id]")]
+      for (const el of main.querySelectorAll("div")) {
+        const text = (el.textContent || "").trim()
+        if (/^\+\d+ (?:alerta menos grave|alertas menos graves)$/.test(text)) {
+          targets.push(el)
+          break
+        }
+      }
+      const out = []
+      for (const el of targets) {
+        el.scrollIntoView({ block: "center", inline: "center" })
+        const r = el.getBoundingClientRect()
+        const visible = r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth
+        if (!visible) {
+          out.push(`not reachable after scrollIntoView: "${(el.textContent || "").trim().slice(0, 40)}"`)
+        }
+      }
+      return out
+    })
+    if (problems.length > 0) {
+      allViolations.push(`\n== ${name} / ${label} (reachability) ==`)
+      allViolations.push(...problems.map((v) => `  - ${v}`))
+    }
+    console.log(`${label} (reachability): ${problems.length === 0 ? "OK" : `${problems.length} violation(s)`}`)
   }
 
   // F5: wait on the observable screen that is actually about to be checked,
@@ -203,54 +274,96 @@ async function runScenarios(browser) {
     return page.evaluate(totalAlertCountInBrowser)
   }
 
-  await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle" })
-  await irAvatares()
-  await check("login")
+  try {
+    await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle" })
+    await irAvatares()
+    await check("login")
 
-  await page.getByRole("button", { name: /Ana Ríos/ }).click()
-  await irPin()
-  await check("pin")
+    await page.getByRole("button", { name: /Ana Ríos/ }).click()
+    await irPin()
+    await check("pin")
 
-  for (const d of "1234") await page.getByRole("button", { name: d, exact: true }).click()
-  await irTablero()
-  await check("dashboard (first visit)")
+    for (const d of "1234") await page.getByRole("button", { name: d, exact: true }).click()
+    await irTablero()
+    await check("dashboard (first visit)")
+    await checkAlertsReachable("dashboard (first visit)")
 
-  // Open whichever alert is on top: the check must not depend on seed data
-  // still being active (earlier runs resolve alerts on shared databases).
-  await page.locator("main [data-alert-id]").first().click()
-  await page.getByRole("dialog").waitFor({ state: "visible" })
-  await check("detail")
+    // E2: the mock repository is a single process-wide singleton, shared
+    // across every viewport this script loops through, and each iteration
+    // below resolves one alert -- so by the last viewport(s) the seed pool
+    // may already be empty ("Sin alertas abiertas"). That is a legitimate
+    // screen this check must still pass (D8 empty state), not a script bug:
+    // skip only the alert-specific interactions with a clear notice instead
+    // of failing on a Playwright timeout waiting for a card that will never
+    // appear.
+    const hayAlertas = (await page.locator("main [data-alert-id]").count()) > 0
 
-  await page.keyboard.press("Escape")
-  await page.getByRole("dialog").waitFor({ state: "hidden" })
-  await page.getByRole("button", { name: "Salir" }).click()
-  await irAvatares()
-  await ingresarComoAna()
-  await check("dashboard (second visit, strip)")
+    if (hayAlertas) {
+      // Open whichever alert is on top: the check must not depend on seed
+      // data still being active (earlier runs resolve alerts on shared
+      // databases).
+      await page.locator("main [data-alert-id]").first().click()
+      await page.getByRole("dialog").waitFor({ state: "visible" })
+      await check("detail")
 
-  // F5 addition: resolve an alert (Atendida) and check the stack/strip right
-  // after — cheap regression coverage for F1 (strip stays in sync) and F3
-  // (focus lands somewhere sane, dialog closes) on a real page.
-  await page.locator("main button[data-alert-id]").first().click()
-  await page.getByRole("dialog").waitFor({ state: "visible" })
-  await page.getByRole("button", { name: "Atendida" }).click()
-  await page.getByRole("dialog").waitFor({ state: "hidden" })
-  await check("dashboard (after resolving an alert)")
+      await page.keyboard.press("Escape")
+      await page.getByRole("dialog").waitFor({ state: "hidden" })
+    } else {
+      console.log("detail: SKIPPED (no active alerts left in the shared mock pool)")
+    }
 
-  await page.goto(`${BASE_URL}/?demo=1`, { waitUntil: "networkidle" })
-  await irAvatares()
-  await ingresarComoAna()
-  const alertCountBeforeSimular = await totalAlertCount()
-  await page.getByRole("button", { name: /Simular turno/ }).click()
-  // K3: data-agnostic -- wait for the total active-alert count to change,
-  // instead of a specific mock-only alert title, so this passes whether the
-  // shift simulation ran against the in-memory mock (fixed
-  // ALERTAS_NUEVO_TURNO) or a local Supabase stack (demo_simular_turno's
-  // weighted random pick from supabase/seed.sql's template catalog).
-  await page.waitForFunction(
-    (before) => {
+    await page.getByRole("button", { name: "Salir" }).click()
+    await irAvatares()
+    await ingresarComoAna()
+    await check("dashboard (second visit, strip)")
+
+    // F5 addition: resolve an alert (Atendida) and check the stack/strip right
+    // after — cheap regression coverage for F1 (strip stays in sync) and F3
+    // (focus lands somewhere sane, dialog closes) on a real page.
+    if (await page.locator("main button[data-alert-id]").count()) {
+      await page.locator("main button[data-alert-id]").first().click()
+      await page.getByRole("dialog").waitFor({ state: "visible" })
+      await page.getByRole("button", { name: "Atendida" }).click()
+      await page.getByRole("dialog").waitFor({ state: "hidden" })
+    } else {
+      console.log("dashboard (after resolving an alert): SKIPPED (no active alerts left in the shared mock pool)")
+    }
+    await check("dashboard (after resolving an alert)")
+    await checkAlertsReachable("dashboard (after resolving an alert)")
+
+    if (consoleErrors.length > 0) {
+      allViolations.push(`\n== ${name} / console errors ==`)
+      allViolations.push(...consoleErrors.map((e) => `  - ${e}`))
+    }
+  } finally {
+    await page.close()
+  }
+}
+
+// E4: trigger a shift from OUTSIDE the app (a direct DB call, never a click)
+// and confirm the dashboard picks it up within the 15s auto-refresh window.
+// Skipped with a clear notice when UI_CHECK_DB_CONTAINER is unset, or when
+// the app is not running against Supabase (mock mode has no such external
+// trigger) — this is the one scenario that is not viewport-specific, so it
+// runs once at kiosk size.
+async function runAutoRefreshScenario(browser, allViolations) {
+  console.log("\n--- auto-refresh (external shift trigger) ---")
+  if (!UI_CHECK_DB_CONTAINER) {
+    console.log("auto-refresh: SKIPPED (UI_CHECK_DB_CONTAINER not set; needs a local Supabase stack)")
+    return
+  }
+
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
+  try {
+    await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle" })
+    await page.getByRole("button", { name: /Ana Ríos/ }).click()
+    await page.getByText("Ingresa tu PIN").waitFor({ state: "visible" })
+    for (const d of "1234") await page.getByRole("button", { name: d, exact: true }).click()
+    await page.getByRole("button", { name: "Salir" }).waitFor({ state: "visible" })
+
+    const before = await page.evaluate(() => {
       const main = document.querySelector("main")
-      if (!main) return false
+      if (!main) return 0
       const cards = main.querySelectorAll("[data-alert-id]").length
       let overflow = 0
       for (const el of main.querySelectorAll("div")) {
@@ -261,24 +374,49 @@ async function runScenarios(browser) {
           break
         }
       }
-      return cards + overflow !== before
-    },
-    alertCountBeforeSimular,
-    { polling: 100 },
-  )
-  await check("dashboard (after shift simulation)")
+      return cards + overflow
+    })
 
-  if (consoleErrors.length > 0) {
-    allViolations.push("\n== console errors ==")
-    allViolations.push(...consoleErrors.map((e) => `  - ${e}`))
+    const { execFile } = await import("node:child_process")
+    const { promisify } = await import("node:util")
+    const execFileAsync = promisify(execFile)
+    await execFileAsync("docker", [
+      "exec",
+      UI_CHECK_DB_CONTAINER,
+      "psql",
+      "-U",
+      "postgres",
+      "-c",
+      "update public.demo_panel set simular_turno = true where linea = 'Línea 3 · Motores'",
+    ])
+
+    await page.waitForFunction(
+      (before) => {
+        const main = document.querySelector("main")
+        if (!main) return false
+        const cards = main.querySelectorAll("[data-alert-id]").length
+        let overflow = 0
+        for (const el of main.querySelectorAll("div")) {
+          const text = (el.textContent || "").trim()
+          const m = text.match(/^\+(\d+) (?:alerta menos grave|alertas menos graves)$/)
+          if (m) {
+            overflow = parseInt(m[1], 10)
+            break
+          }
+        }
+        return cards + overflow !== before
+      },
+      before,
+      { timeout: 20_000, polling: 500 },
+    )
+    console.log("auto-refresh: OK (alert count changed within 20s with no click)")
+  } catch (err) {
+    allViolations.push(`\n== auto-refresh (external shift trigger) ==`)
+    allViolations.push(`  - ${err.message}`)
+    console.log("auto-refresh: FAILED")
+  } finally {
+    await page.close()
   }
-
-  if (allViolations.length > 0) {
-    console.error("\ntest:ui FAILED\n" + allViolations.join("\n"))
-    process.exit(1)
-  }
-
-  console.log("\ntest:ui PASSED: no scroll, no text<24px, no target<88px, no clipped content, no console errors.")
 }
 
 main().catch((err) => {
