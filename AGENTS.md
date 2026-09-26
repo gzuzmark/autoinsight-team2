@@ -40,8 +40,18 @@ When a change touches `supabase/**`, also run (local Docker stack only,
 never the remote project — see the README "Supabase (local)" section):
 
 ```bash
-supabase db reset && supabase test db
+supabase db reset --local && supabase test db
+supabase db advisors --local     # expect 0 issues
+corepack pnpm db:types:check     # fails if lib/supabase/database.types.ts is stale
 ```
+
+`corepack pnpm db:types` regenerates `lib/supabase/database.types.ts` from
+the local schema (`supabase gen types typescript --local`); run it and
+commit the result whenever a migration changes tables, columns, enums, or
+function signatures. `db:types:check` (`scripts/check-db-types.mjs`)
+regenerates the types to a temp file and diffs them against the committed
+file, failing (non-zero exit) on drift instead of silently leaving stale
+types in the tree.
 
 `test:run` includes `lib/design-rules.test.ts`, a static guard that scans
 `components/**` and `app/**` (excluding `components/ui/**` and `*.test.*`)

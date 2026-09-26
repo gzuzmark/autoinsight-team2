@@ -57,7 +57,9 @@ Supabase yet — the client data layer (T7-T9) is a separate, later change.
 supabase start                          # first run downloads Docker images
 supabase db reset                       # (re)applies migrations + seed.sql
 supabase test db                        # runs the pgTAP suite in supabase/tests/
-supabase gen types typescript --local > lib/supabase/database.types.ts
+supabase db advisors --local            # security/perf lint, expect 0 issues
+corepack pnpm db:types                  # regenerate lib/supabase/database.types.ts
+corepack pnpm db:types:check            # fails (non-zero) if committed types are stale
 supabase stop                           # keeps the data volume; add --no-backup to also drop it
 ```
 
@@ -86,6 +88,19 @@ Dashboard → Integrations → Cron on a remote project after the B8 cutover.
 Access model (D17): the browser never talks to Supabase directly. Next.js
 route handlers (server-side) use the `service_role` (secret) key; `anon` and
 `authenticated` have zero table privileges and zero `EXECUTE` on any RPC.
+
+Login lockout: 5 consecutive wrong PINs lock a user out for
+`private.duracion_bloqueo()` (5 minutes); a lock that has already expired
+resets the failure counter, so the next attempt starts from zero again
+instead of relocking on a single new failure. `public.desbloquear_usuario(p_usuario_id)`
+(service_role only) clears a lockout immediately, for an admin/demo unlock:
+
+```sql
+select public.desbloquear_usuario('<usuario_id>'); -- as service_role
+```
+
+Per-client/IP request throttling (rate-limiting the login route itself) is
+not a database concern and belongs to the Next.js route handlers (T8).
 
 Cutover to the remote project (`urxhacdnqgllscijffmh`) — applying these
 migrations there, seeding it, and enabling cron — is a separate, explicitly
