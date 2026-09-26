@@ -111,6 +111,7 @@ export class SupabaseFloorRepository implements FloorRepository {
       ultimaActualizacion: new Date(row.ultima_actualizacion).getTime(),
       ultimaVisita: row.ultima_visita ? new Date(row.ultima_visita).getTime() : null,
       nuevasIds: row.nuevas_ids,
+      cambiosDesdeVisita: row.cambios_desde_visita,
     }
   }
 
@@ -156,5 +157,6 @@ type TableroRow = {
   }>
   ultima_visita: string | null
   nuevas_ids: string[]
+  cambios_desde_visita: number
   ultima_actualizacion: string
 }

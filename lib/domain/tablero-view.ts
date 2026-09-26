@@ -28,6 +28,14 @@ const VISTA_VACIA: VistaTablero = {
  * visit" signal (currently-active alerts created after `ultimaVisita`, see
  * the `tablero` RPC and `InMemoryFloorRepository`); this function only
  * reshapes it for the UI, it does not recompute "newness" itself.
+ *
+ * `totalNuevosDesdeVisita` comes from `tablero.cambiosDesdeVisita` (K2), NOT
+ * from `nuevasIds.size`: `nuevasIds` only lists currently-ACTIVE new alerts,
+ * so once every new alert since the last visit is resolved, `nuevasIds`
+ * empties out and `nuevasIds.size` would wrongly read 0 -- the since-last-
+ * visit strip would then claim "Sin cambios" even though something did
+ * change (F1 regression). `cambiosDesdeVisita` counts ALL alerts created
+ * after `ultimaVisita` regardless of `estado`, so it stays > 0 in that case.
  */
 export function derivarVista(tablero: Tablero | null): VistaTablero {
   if (!tablero) return VISTA_VACIA
@@ -36,7 +44,7 @@ export function derivarVista(tablero: Tablero | null): VistaTablero {
   return {
     alertasActivas: tablero.alertas,
     cambiosDesdeUltimaVisita: newSinceVisit(tablero.alertas, nuevasIds),
-    totalNuevosDesdeVisita: nuevasIds.size,
+    totalNuevosDesdeVisita: tablero.cambiosDesdeVisita,
     esPrimeraVisita: tablero.ultimaVisita === null,
     ultimoLogoutTs: tablero.ultimaVisita,
   }

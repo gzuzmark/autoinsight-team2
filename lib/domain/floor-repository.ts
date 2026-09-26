@@ -45,6 +45,13 @@ export type Tablero = {
   ultimaVisita: number | null
   /** Ids of currently-active alerts created after `ultimaVisita` (D9). */
   nuevasIds: string[]
+  /** K2: count of ALL alerts on the line created after `ultimaVisita`,
+   * regardless of `estado` (unlike `nuevasIds`, which only lists
+   * currently-active ones). 0 on first visit (`ultimaVisita === null`).
+   * Lets the client tell "nothing ever changed" (0) apart from "something
+   * changed but every new alert has since been resolved" (> 0 with an empty
+   * `nuevasIds` intersection against active alerts) -- see F1/K2. */
+  cambiosDesdeVisita: number
 }
 
 export type Resolucion = "atendida" | "no_aplica"

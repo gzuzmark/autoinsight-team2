@@ -85,6 +85,7 @@ export class InMemoryFloorRepository implements FloorRepository {
       ultimaActualizacion: this.ultimaActualizacion,
       ultimaVisita: sesion.ultimaVisita,
       nuevasIds: this.nuevasIdsDesde(activas, sesion.ultimaVisita),
+      cambiosDesdeVisita: this.cambiosDesdeVisita(sesion.ultimaVisita),
     }
   }
 
@@ -129,5 +130,12 @@ export class InMemoryFloorRepository implements FloorRepository {
   private nuevasIdsDesde(activas: Alerta[], ultimaVisita: number | null): string[] {
     if (ultimaVisita === null) return []
     return activas.filter((a) => a.timestamp > ultimaVisita).map((a) => a.id)
+  }
+
+  /** K2: count of ALL alerts (any estado) created after `ultimaVisita`,
+   * unlike `nuevasIdsDesde` which is active-only. 0 on first visit. */
+  private cambiosDesdeVisita(ultimaVisita: number | null): number {
+    if (ultimaVisita === null) return 0
+    return this.alertas.filter((a) => a.timestamp > ultimaVisita).length
   }
 }
