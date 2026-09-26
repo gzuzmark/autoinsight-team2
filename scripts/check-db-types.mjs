@@ -11,9 +11,17 @@ import { join } from "node:path"
 const COMMITTED_PATH = "lib/supabase/database.types.ts"
 
 function generateTypes() {
-  return execFileSync("supabase", ["gen", "types", "typescript", "--local"], {
-    encoding: "utf8",
-  })
+  try {
+    return execFileSync("supabase", ["gen", "types", "typescript", "--local"], {
+      encoding: "utf8",
+    })
+  } catch (err) {
+    console.error(
+      "db:types:check: local Supabase is not running: run `supabase start`.\n" +
+        (err?.stderr?.toString?.() ?? err?.message ?? String(err)),
+    )
+    process.exit(1)
+  }
 }
 
 const generated = generateTypes()
@@ -31,6 +39,6 @@ writeFileSync(tmpFile, generated)
 console.error(
   `${COMMITTED_PATH} is out of date with the local schema.\n` +
     `Freshly generated types written to: ${tmpFile}\n` +
-    `Run: supabase gen types typescript --local > ${COMMITTED_PATH}`,
+    `Run: corepack pnpm db:types`,
 )
 process.exit(1)

@@ -10,7 +10,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:ui": "node scripts/ui-check.mjs",
-    "db:types": "supabase gen types typescript --local > lib/supabase/database.types.ts",
+    "db:types": "node scripts/gen-db-types.mjs",
     "db:types:check": "node scripts/check-db-types.mjs"
   },
   "dependencies": {
