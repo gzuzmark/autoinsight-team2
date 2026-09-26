@@ -142,6 +142,28 @@ describe("InMemoryFloorRepository", () => {
     it("throws SessionInvalidError for an unknown session", async () => {
       await expect(repo.resolverAlerta("nope", "a1", "atendida")).rejects.toBeInstanceOf(SessionInvalidError)
     })
+
+    it("D24: never changes any KPI tile (atendida)", async () => {
+      const sessionId = await repo.iniciarSesion(ANA.id, ANA.pin)
+      const before = await repo.tablero(sessionId!)
+      const targetId = before.alertas[0].id
+
+      await repo.resolverAlerta(sessionId!, targetId, "atendida")
+
+      const after = await repo.tablero(sessionId!)
+      expect(after.indicadores).toEqual(before.indicadores)
+    })
+
+    it("D24: never changes any KPI tile (no_aplica)", async () => {
+      const sessionId = await repo.iniciarSesion(ANA.id, ANA.pin)
+      const before = await repo.tablero(sessionId!)
+      const targetId = before.alertas[0].id
+
+      await repo.resolverAlerta(sessionId!, targetId, "no_aplica")
+
+      const after = await repo.tablero(sessionId!)
+      expect(after.indicadores).toEqual(before.indicadores)
+    })
   })
 
   describe("simular", () => {
