@@ -9,7 +9,9 @@
     "start": "next start",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:ui": "node scripts/ui-check.mjs"
+    "test:ui": "node scripts/ui-check.mjs",
+    "db:types": "supabase gen types typescript --local > lib/supabase/database.types.ts",
+    "db:types:check": "node scripts/check-db-types.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

@@ -7,6 +7,31 @@ export type Json =
   | Json[]
 
 export type Database = {
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       alertas: {
@@ -387,6 +412,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      desbloquear_usuario: {
+        Args: { p_usuario_id: string }
+        Returns: undefined
+      }
       iniciar_sesion: {
         Args: { p_pin: string; p_usuario_id: string }
         Returns: string
@@ -538,6 +567,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       estado_alerta: ["nueva", "atendida", "no_aplica"],
