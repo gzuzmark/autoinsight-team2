@@ -1,0 +1,94 @@
+import { describe, expect, it } from "vitest"
+import {
+  fpyBarEstado,
+  heatmapBucket,
+  ALERTAS,
+  FPY_TENDENCIA,
+  PARETO_DEFECTOS,
+  KPIS,
+  getAlertaPorId,
+} from "./mock-data"
+
+describe("fpyBarEstado (pure helper: FPY 30-day bar color by threshold)", () => {
+  it("returns 'ok' at and above 92", () => {
+    expect(fpyBarEstado(92)).toBe("ok")
+    expect(fpyBarEstado(97)).toBe("ok")
+  })
+
+  it("returns 'atencion' between 90 and 92 (exclusive of 92, inclusive of 90)", () => {
+    expect(fpyBarEstado(90)).toBe("atencion")
+    expect(fpyBarEstado(91.5)).toBe("atencion")
+  })
+
+  it("returns 'parar' below 90", () => {
+    expect(fpyBarEstado(89.9)).toBe("parar")
+    expect(fpyBarEstado(0)).toBe("parar")
+  })
+})
+
+describe("heatmapBucket (pure helper: alert count -> heatmap bucket)", () => {
+  it("returns '0' for zero alerts", () => {
+    expect(heatmapBucket(0)).toBe("0")
+  })
+
+  it("returns '1-2' for 1 or 2 alerts", () => {
+    expect(heatmapBucket(1)).toBe("1-2")
+    expect(heatmapBucket(2)).toBe("1-2")
+  })
+
+  it("returns '3-5' for 3 to 5 alerts", () => {
+    expect(heatmapBucket(3)).toBe("3-5")
+    expect(heatmapBucket(5)).toBe("3-5")
+  })
+
+  it("returns '6+' for 6 or more alerts", () => {
+    expect(heatmapBucket(6)).toBe("6+")
+    expect(heatmapBucket(20)).toBe("6+")
+  })
+
+  it("rejects a negative count", () => {
+    expect(() => heatmapBucket(-1)).toThrow()
+  })
+})
+
+describe("mock data shape and invariants", () => {
+  it("has exactly 5 KPI cards", () => {
+    expect(KPIS).toHaveLength(5)
+  })
+
+  it("has a 30-day FPY trend", () => {
+    expect(FPY_TENDENCIA.length).toBeGreaterThanOrEqual(28)
+    for (const punto of FPY_TENDENCIA) {
+      expect(punto.fpy).toBeGreaterThan(0)
+      expect(punto.fpy).toBeLessThanOrEqual(100)
+    }
+  })
+
+  it("orders the named defect causes by descending count (the trailing 'Otros' catch-all is exempt)", () => {
+    const nombradas = PARETO_DEFECTOS.filter((c) => c.causa !== "Otros")
+    for (let i = 1; i < nombradas.length; i++) {
+      expect(nombradas[i].cantidad).toBeLessThanOrEqual(nombradas[i - 1].cantidad)
+    }
+  })
+
+  it("has cumulative percentage strictly increasing across the Pareto", () => {
+    for (let i = 1; i < PARETO_DEFECTOS.length; i++) {
+      expect(PARETO_DEFECTOS[i].porcentajeAcumulado).toBeGreaterThan(
+        PARETO_DEFECTOS[i - 1].porcentajeAcumulado,
+      )
+    }
+  })
+
+  it("has at least one open alert with an ALTA severity", () => {
+    expect(ALERTAS.some((a) => a.gravedad === "ALTA")).toBe(true)
+  })
+
+  it("looks up a known alert by id", () => {
+    const primera = ALERTAS[0]
+    expect(getAlertaPorId(primera.id)).toEqual(primera)
+  })
+
+  it("returns undefined for an unknown alert id", () => {
+    expect(getAlertaPorId("no-existe")).toBeUndefined()
+  })
+})
