@@ -129,22 +129,27 @@ insert into public.alertas (linea_id, estacion_id, severidad, titulo, valor, lim
 
 -- Simulator catalog (>= 8 templates), covering the stations above. Weights
 -- (peso) are relative, used by demo_generar_alertas' weighted pick.
--- `indicador_clave` (D25) links a template to a KPI: FPY, Defectos / hora and
--- Scrap each have one, with valor_min/valor_max chosen to land inside the
+-- `indicador_clave` (D25) links a template to a KPI. As of Phase F (D31), 10
+-- of the 11 templates are linked (only "Nivel de refrigerante en rango",
+-- severidad ok, stays unlinked); each linked template also carries its own
+-- `lectura_min`/`lectura_max` (D31): the range demo_generar_alertas draws
+-- the RECORDED KPI READING from, in the KPI's own unit -- separate from
+-- `valor_min`/`valor_max`, the range for the alert's own displayed valor (in
+-- the alert's own unit, e.g. Nm for Torque). Both ranges land inside the
 -- band matching the template's own severidad (see the thresholds on the
 -- indicadores insert above) so a generated reading never disagrees with the
 -- alert it came from.
-insert into public.plantillas_alerta (severidad, titulo, estacion_numero, unidad, valor_min, valor_max, limite, peso, indicador_clave) values
-  ('parar', 'Paro de línea por fuga de aire', 6, '%', 60, 100, 90, 1, null),
-  ('atencion', 'Nivel de adhesivo bajo', 5, '%', 10, 30, 25, 3, null),
-  ('parar', 'Torque fuera de rango', 7, 'Nm', 8, 15, 10, 2, null),
-  ('atencion', 'Defectos por hora en aumento', 2, 'defectos/h', 4.5, 6, 4, 4, 'dph'),
-  ('atencion', 'Temperatura de horno alta', 5, '°C', 170, 210, 180, 3, null),
-  ('atencion', 'Retrabajo sobre lo esperado', 3, '%', 5, 12, 5, 3, null),
-  ('parar', 'Sensor de presión sin respuesta', 6, 'kPa', 0, 50, 80, 1, null),
-  ('atencion', 'Vibración anómala en banda', 4, 'mm/s', 3, 9, 4.5, 2, null),
-  ('ok', 'Nivel de refrigerante en rango', 1, '%', 40, 90, 30, 5, null),
-  ('parar', 'FPY por debajo del objetivo', 4, '%', 82, 89.5, 90, 2, 'fpy'),
-  ('atencion', 'Scrap por encima del objetivo', 3, '%', 2.1, 2.9, 2, 2, 'scrap');
+insert into public.plantillas_alerta (severidad, titulo, estacion_numero, unidad, valor_min, valor_max, limite, peso, indicador_clave, lectura_min, lectura_max) values
+  ('parar', 'Paro de línea por fuga de aire', 6, '%', 60, 100, 90, 1, 'fpy', 84, 89.5),
+  ('atencion', 'Nivel de adhesivo bajo', 5, '%', 10, 30, 25, 3, 'scrap', 2.1, 2.9),
+  ('parar', 'Torque fuera de rango', 7, 'Nm', 8, 15, 10, 2, 'dph', 6.2, 9),
+  ('atencion', 'Defectos por hora en aumento', 2, 'defectos/h', 4.5, 6, 4, 4, 'dph', 4.5, 6),
+  ('atencion', 'Temperatura de horno alta', 5, '°C', 170, 210, 180, 3, 'scrap', 2.1, 2.9),
+  ('atencion', 'Retrabajo sobre lo esperado', 3, '%', 5, 12, 5, 3, 'fpy', 90.2, 91.8),
+  ('parar', 'Sensor de presión sin respuesta', 6, 'kPa', 0, 50, 80, 1, 'dph', 6.2, 9),
+  ('atencion', 'Vibración anómala en banda', 4, 'mm/s', 3, 9, 4.5, 2, 'dph', 4.2, 5.9),
+  ('ok', 'Nivel de refrigerante en rango', 1, '%', 40, 90, 30, 5, null, null, null),
+  ('parar', 'FPY por debajo del objetivo', 4, '%', 82, 89.5, 90, 2, 'fpy', 82, 89.5),
+  ('atencion', 'Scrap por encima del objetivo', 3, '%', 2.1, 2.9, 2, 2, 'scrap', 2.1, 2.9);
 
 commit;

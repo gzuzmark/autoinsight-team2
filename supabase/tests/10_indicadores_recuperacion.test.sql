@@ -31,8 +31,8 @@ select public.iniciar_sesion('33333333-3333-3333-3333-333333333333', '1234') \gs
 -- state toward ok; the KPI that WAS hit keeps the new reading's state.
 -- ---------------------------------------------------------------------------
 
-insert into public.plantillas_alerta (severidad, titulo, estacion_numero, unidad, valor_min, valor_max, limite, peso, indicador_clave)
-  values ('atencion', 'Defectos por hora en aumento', 1, 'defectos/h', 7, 7, 4, 1, 'dph');
+insert into public.plantillas_alerta (severidad, titulo, estacion_numero, unidad, valor_min, valor_max, limite, peso, indicador_clave, lectura_min, lectura_max)
+  values ('atencion', 'Defectos por hora en aumento', 1, 'defectos/h', 7, 7, 4, 1, 'dph', 7, 7);
 
 select public.demo_simular_turno(:'s_iniciar_sesion', 1);
 

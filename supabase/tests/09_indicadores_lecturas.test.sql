@@ -78,20 +78,22 @@ select is(private.estado_indicador(6.01, false, 4, 6), 'parar'::public.severidad
 select is(private.estado_indicador(1.6, false, 2, 3), 'ok'::public.severidad, 'lower-is-better at or below the atencion threshold is ok');
 
 -- ---------------------------------------------------------------------------
--- Generating a KPI-linked alert records the reading (D25).
+-- Generating a KPI-linked alert records the reading (D25). As of Phase F
+-- (D31), the recorded reading is drawn from the template's OWN
+-- lectura_min/lectura_max range, not the alert's own valor (see
+-- supabase/tests/13_indicadores_alertas_abiertas.test.sql for the
+-- lectura-vs-valor separation, e.g. Torque/Nm recording a dph reading).
 -- ---------------------------------------------------------------------------
 
-insert into public.plantillas_alerta (severidad, titulo, estacion_numero, unidad, valor_min, valor_max, limite, peso, indicador_clave)
-  values ('atencion', 'FPY por debajo del objetivo', 1, '%', 85, 89, 90, 1, 'fpy');
+insert into public.plantillas_alerta (severidad, titulo, estacion_numero, unidad, valor_min, valor_max, limite, peso, indicador_clave, lectura_min, lectura_max)
+  values ('atencion', 'FPY por debajo del objetivo', 1, '%', 85, 89, 90, 1, 'fpy', 90.2, 91.8);
 
 select public.demo_generar_alertas('22222222-2222-2222-2222-222222222222'::uuid, 1);
 
-select is(
-  (select count(*)::int from public.indicadores
-     where linea_id = '22222222-2222-2222-2222-222222222222' and clave = 'fpy'
-       and valor = (select valor from public.alertas where linea_id = '22222222-2222-2222-2222-222222222222' and titulo = 'FPY por debajo del objetivo')),
-  1,
-  'generating a KPI-linked alert records its valor on the matching indicador'
+select ok(
+  (select valor between 90.2 and 91.8 from public.indicadores
+     where linea_id = '22222222-2222-2222-2222-222222222222' and clave = 'fpy'),
+  'generating a KPI-linked alert records a reading within the template''s lectura range'
 );
 select ok(
   (select actualizado_en > now() - interval '1 minute' from public.indicadores

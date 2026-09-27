@@ -308,6 +308,8 @@ export type Database = {
           estacion_numero: number
           id: string
           indicador_clave: string | null
+          lectura_max: number | null
+          lectura_min: number | null
           limite: number
           peso: number
           severidad: Database["public"]["Enums"]["severidad"]
@@ -320,6 +322,8 @@ export type Database = {
           estacion_numero: number
           id?: string
           indicador_clave?: string | null
+          lectura_max?: number | null
+          lectura_min?: number | null
           limite: number
           peso: number
           severidad: Database["public"]["Enums"]["severidad"]
@@ -332,6 +336,8 @@ export type Database = {
           estacion_numero?: number
           id?: string
           indicador_clave?: string | null
+          lectura_max?: number | null
+          lectura_min?: number | null
           limite?: number
           peso?: number
           severidad?: Database["public"]["Enums"]["severidad"]
