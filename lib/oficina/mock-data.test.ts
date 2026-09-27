@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest"
 import {
   fpyBarEstado,
   heatmapBucket,
+  reporteVariante,
   ALERTAS,
   FPY_TENDENCIA,
   PARETO_DEFECTOS,
   KPIS,
+  REPORTES,
   getAlertaPorId,
 } from "./mock-data"
 
@@ -90,5 +92,24 @@ describe("mock data shape and invariants", () => {
 
   it("returns undefined for an unknown alert id", () => {
     expect(getAlertaPorId("no-existe")).toBeUndefined()
+  })
+
+  it("has exactly 5 reports, 3 of them scheduled", () => {
+    expect(REPORTES).toHaveLength(5)
+    expect(REPORTES.filter((r) => r.estado === "Programado")).toHaveLength(3)
+  })
+})
+
+describe("reporteVariante (pure helper: report status -> badge variant)", () => {
+  it("maps 'Programado' to the default (brand) variant", () => {
+    expect(reporteVariante("Programado")).toBe("default")
+  })
+
+  it("maps 'Manual' to the secondary variant", () => {
+    expect(reporteVariante("Manual")).toBe("secondary")
+  })
+
+  it("maps 'Pausado' to the outline variant", () => {
+    expect(reporteVariante("Pausado")).toBe("outline")
   })
 })

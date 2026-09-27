@@ -213,3 +213,33 @@ export const ALERTAS: AlertaOficina[] = [
 export function getAlertaPorId(id: string): AlertaOficina | undefined {
   return ALERTAS.find((a) => a.id === id)
 }
+
+export type EstadoReporte = "Programado" | "Manual" | "Pausado"
+export type VarianteBadge = "default" | "secondary" | "outline" | "destructive"
+
+/** Report status -> badge variant. */
+export function reporteVariante(estado: EstadoReporte): VarianteBadge {
+  switch (estado) {
+    case "Programado":
+      return "default"
+    case "Manual":
+      return "secondary"
+    case "Pausado":
+      return "outline"
+  }
+}
+
+export type Reporte = {
+  id: string
+  nombre: string
+  detalle: string
+  estado: EstadoReporte
+}
+
+export const REPORTES: Reporte[] = [
+  { id: "resumen-diario-calidad", nombre: "Resumen diario de calidad", detalle: "Todos los días 07:00 · PDF · 12 destinatarios", estado: "Programado" },
+  { id: "pareto-semanal-defectos", nombre: "Pareto semanal de defectos", detalle: "Lunes 08:00 · Excel · Calidad y garantías", estado: "Programado" },
+  { id: "garantias-reclamos-mes", nombre: "Garantías y reclamos del mes", detalle: "Día 1 · PDF · Dirección", estado: "Programado" },
+  { id: "tiempo-atencion-turno", nombre: "Tiempo de atención por turno", detalle: "Bajo demanda · Excel", estado: "Manual" },
+  { id: "auditoria-alertas-no-aplica", nombre: "Auditoría de alertas No aplica", detalle: "Viernes 17:00 · PDF · Jefes de planta", estado: "Pausado" },
+]
