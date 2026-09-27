@@ -9,7 +9,7 @@
 -- (lectura_min/lectura_max); "Nivel de refrigerante en rango" stays
 -- unlinked.
 begin;
-select plan(14);
+select plan(15);
 
 -- ---------------------------------------------------------------------------
 -- Schema: lectura_min / lectura_max, CHECK constraints (D31). Run first,
@@ -203,6 +203,38 @@ select ok(
       and i.estado = 'ok'
   ),
   'no KPI shows ok while an open linked alert for it is atencion/parar'
+);
+
+-- ---------------------------------------------------------------------------
+-- A new, milder KPI alert must not override a more severe open one on the
+-- same KPI (found on staging: dph ATENCION while "Torque fuera de rango"
+-- (parar, dph) was open). Line G: every template is active except the
+-- milder dph one, so the shift can only generate it.
+-- ---------------------------------------------------------------------------
+
+insert into public.lineas (id, planta_id, nombre, turno)
+  values ('88888888-8888-8888-8888-888888888888', '11111111-1111-1111-1111-111111111111', 'Línea G', 'Turno mañana');
+insert into public.indicadores
+  (linea_id, clave, nombre, valor, unidad, mayor_es_mejor, umbral_atencion, umbral_parar, detalle, orden)
+values
+  ('88888888-8888-8888-8888-888888888888', 'fpy', 'FPY', 95, '%', true, 92, 90, 'x', 1),
+  ('88888888-8888-8888-8888-888888888888', 'dph', 'Defectos / hora', 3, 'defectos/h', false, 4, 6, 'x', 2),
+  ('88888888-8888-8888-8888-888888888888', 'scrap', 'Scrap', 1, '%', false, 2, 3, 'x', 3);
+insert into public.plantillas_alerta
+    (severidad, titulo, estacion_numero, unidad, valor_min, valor_max, limite, peso, indicador_clave, lectura_min, lectura_max)
+  values
+    ('parar', 'Torque fuera de rango', 7, 'Nm', 8, 15, 10, 1, 'dph', 6.2, 9),
+    ('atencion', 'Vibración anómala en banda', 4, 'mm/s', 3, 9, 4.5, 1, 'dph', 4.2, 5.9);
+insert into public.alertas (linea_id, severidad, titulo)
+  select '88888888-8888-8888-8888-888888888888', t.severidad, t.titulo
+  from public.plantillas_alerta t
+  where t.titulo <> 'Vibración anómala en banda';
+
+select private.simular_turno_en_linea('88888888-8888-8888-8888-888888888888'::uuid, 1);
+select is(
+  (select estado from public.indicadores where linea_id = '88888888-8888-8888-8888-888888888888' and clave = 'dph'),
+  'parar'::public.severidad,
+  'a new milder dph alert does not override the open parar dph alert: the tile stays parar'
 );
 
 select * from finish();
