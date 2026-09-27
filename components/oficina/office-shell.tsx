@@ -44,7 +44,10 @@ export function OfficeShell({
 }) {
   return (
     <div className="flex min-h-dvh w-full bg-neutral-50 text-foreground">
-      <aside className="flex w-56 shrink-0 flex-col gap-1 border-r border-border bg-white p-3">
+      {/* Desk view (O-D3): the sidebar collapses below md instead of forcing
+          horizontal scroll on a narrow window -- the office view targets a
+          desktop browser, not a phone, but it still must not overflow. */}
+      <aside className="hidden w-56 shrink-0 flex-col gap-1 border-r border-border bg-white p-3 md:flex">
         <div className="flex items-center gap-2 px-2 py-2">
           <span className="flex size-7 items-center justify-center rounded-md bg-indigo-700 text-xs font-black text-white">
             AI

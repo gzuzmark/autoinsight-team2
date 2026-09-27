@@ -54,7 +54,9 @@ async function main() {
   try {
     for (const viewport of VIEWPORTS) {
       await runScenariosAtViewport(browser, viewport, allViolations)
+      await runOfficeScenariosAtViewport(browser, viewport, allViolations)
     }
+    await runOfficeNavigationScenario(browser, allViolations)
     await runAutoRefreshScenario(browser, allViolations)
   } finally {
     await browser.close()
@@ -335,6 +337,157 @@ async function runScenariosAtViewport(browser, viewport, allViolations) {
       allViolations.push(`\n== ${name} / console errors ==`)
       allViolations.push(...consoleErrors.map((e) => `  - ${e}`))
     }
+  } finally {
+    await page.close()
+  }
+}
+
+// Office smoke (O5): the office desk view (/, /oficina, /oficina/alertas/[id],
+// /oficina/reportes) is static and not held to the floor's 24px text / 88px
+// touch target rules (O-D3) -- this only asserts no horizontal overflow and
+// no console errors on those pages, plus the three cross-app navigation
+// links. `/` is the one exception: it is the tablet's entry point, so it
+// still follows the floor rules (O-D1), checked the same way the floor
+// scenario checks `/planta`.
+const SAMPLE_ALERT_ID = "torque-fuera-de-rango-l3-e7"
+
+function officePageChecks(page, name, allViolations) {
+  async function checkOverflow(label) {
+    const result = await page.evaluate(() => {
+      const docEl = document.documentElement
+      const violations = []
+      if (docEl.scrollWidth > docEl.clientWidth + 1) {
+        violations.push(`horizontal overflow: scrollWidth=${docEl.scrollWidth} clientWidth=${docEl.clientWidth}`)
+      }
+      return violations
+    })
+    if (result.length > 0) {
+      allViolations.push(`\n== office ${name} / ${label} ==`)
+      allViolations.push(...result.map((v) => `  - ${v}`))
+    }
+    console.log(`office ${label}: ${result.length === 0 ? "OK" : `${result.length} violation(s)`}`)
+  }
+
+  // O-D1: `/` is the tablet's entry point, so (unlike the rest of /oficina)
+  // it still follows the floor's 24px text / 88px touch target rules.
+  async function checkSelectorFloorRules(label) {
+    const result = await page.evaluate(
+      ({ MIN_TEXT_PX, MIN_TARGET_PX }) => {
+        const violations = []
+        const main = document.querySelector("main")
+        if (!main) {
+          violations.push("no <main> element found")
+          return violations
+        }
+        for (const el of main.querySelectorAll("*")) {
+          const hasOwnText = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())
+          if (!hasOwnText) continue
+          const r = el.getBoundingClientRect()
+          if (r.width <= 1 || r.height <= 1) continue
+          const fs = parseFloat(getComputedStyle(el).fontSize)
+          if (fs < MIN_TEXT_PX) {
+            violations.push(`text<${MIN_TEXT_PX}px: ${fs}px "${el.textContent.trim().slice(0, 40)}"`)
+          }
+        }
+        for (const el of main.querySelectorAll("button, a, [role=button]")) {
+          const r = el.getBoundingClientRect()
+          if (r.width < MIN_TARGET_PX || r.height < MIN_TARGET_PX) {
+            const targetLabel = (el.getAttribute("aria-label") || el.textContent || "").trim().slice(0, 40)
+            violations.push(`target<${MIN_TARGET_PX}px: ${Math.round(r.width)}x${Math.round(r.height)} "${targetLabel}"`)
+          }
+        }
+        return violations
+      },
+      { MIN_TEXT_PX, MIN_TARGET_PX },
+    )
+    if (result.length > 0) {
+      allViolations.push(`\n== office ${name} / ${label} (floor rules) ==`)
+      allViolations.push(...result.map((v) => `  - ${v}`))
+    }
+    console.log(`office ${label} (floor rules): ${result.length === 0 ? "OK" : `${result.length} violation(s)`}`)
+  }
+
+  return { checkOverflow, checkSelectorFloorRules }
+}
+
+// Visits the four static office/selector routes at each viewport (no login
+// involved -- none of these routes need one) and asserts no horizontal
+// overflow or console errors; `/` additionally keeps the floor's 24px/88px
+// rules (O-D1). Kept separate from the one-time navigation scenario below so
+// this loop never touches the shared login-throttle bucket (D21): with 4
+// viewports x the existing floor scenario's 2 logins each, adding logins
+// here too would push a full run over the throttle window.
+async function runOfficeScenariosAtViewport(browser, viewport, allViolations) {
+  const { name, width, height } = viewport
+  console.log(`\n--- office / ${name} ---`)
+  const page = await browser.newPage({ viewport: { width, height } })
+
+  const consoleErrors = []
+  page.on("console", (m) => {
+    if (m.type() === "error") consoleErrors.push(m.text())
+  })
+  page.on("pageerror", (e) => consoleErrors.push("pageerror: " + e.message))
+
+  const { checkOverflow, checkSelectorFloorRules } = officePageChecks(page, name, allViolations)
+
+  try {
+    await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle" })
+    await page.getByRole("heading", { name: "¿Cómo vas a trabajar hoy?" }).waitFor({ state: "visible" })
+    await checkOverflow("selector")
+    await checkSelectorFloorRules("selector")
+
+    await page.goto(`${BASE_URL}/oficina`, { waitUntil: "networkidle" })
+    await page.getByRole("heading", { name: "Resumen de planta" }).waitFor({ state: "visible" })
+    await checkOverflow("oficina resumen")
+
+    await page.goto(`${BASE_URL}/oficina/alertas/${SAMPLE_ALERT_ID}`, { waitUntil: "networkidle" })
+    await page.getByRole("heading", { name: "Investigación de alerta" }).waitFor({ state: "visible" })
+    await checkOverflow("oficina alerta")
+
+    await page.goto(`${BASE_URL}/oficina/reportes`, { waitUntil: "networkidle" })
+    await page.getByText("Programar reporte", { exact: true }).waitFor({ state: "visible" })
+    await checkOverflow("oficina reportes")
+
+    if (consoleErrors.length > 0) {
+      allViolations.push(`\n== office ${name} / console errors ==`)
+      allViolations.push(...consoleErrors.map((e) => `  - ${e}`))
+    }
+  } finally {
+    await page.close()
+  }
+}
+
+// Cross-app navigation, checked once (not per viewport, at kiosk size):
+// selector -> oficina (link), oficina -> planta (header switch), and
+// planta -> selector (the "Cambiar vista" header link, which only appears
+// once logged in). Kept to a single login/logout pair -- see the throttle
+// note above.
+async function runOfficeNavigationScenario(browser, allViolations) {
+  console.log("\n--- office navigation (selector <-> oficina <-> planta) ---")
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
+  try {
+    await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle" })
+    await page.getByRole("heading", { name: "¿Cómo vas a trabajar hoy?" }).waitFor({ state: "visible" })
+
+    await page.getByRole("link", { name: "Entrar a Oficina" }).click()
+    await page.getByRole("heading", { name: "Resumen de planta" }).waitFor({ state: "visible" })
+    console.log("navigation selector -> oficina: OK")
+
+    await page.getByRole("link", { name: "Planta", exact: true }).click()
+    await page.getByRole("button", { name: /Ana Ríos/ }).waitFor({ state: "visible" })
+    console.log("navigation oficina switch -> planta: OK")
+
+    await page.getByRole("button", { name: /Ana Ríos/ }).click()
+    await page.getByText("Ingresa tu PIN").waitFor({ state: "visible" })
+    for (const d of "1234") await page.getByRole("button", { name: d, exact: true }).click()
+    await page.getByRole("button", { name: "Salir" }).waitFor({ state: "visible" })
+    await page.getByRole("link", { name: "Cambiar vista" }).click()
+    await page.getByRole("heading", { name: "¿Cómo vas a trabajar hoy?" }).waitFor({ state: "visible" })
+    console.log("navigation planta -> selector: OK")
+  } catch (err) {
+    allViolations.push(`\n== office navigation ==`)
+    allViolations.push(`  - ${err.message}`)
+    console.log("office navigation: FAILED")
   } finally {
     await page.close()
   }
