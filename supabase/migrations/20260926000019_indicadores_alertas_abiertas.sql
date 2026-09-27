@@ -1,12 +1,20 @@
--- Phase F (D31): user reported (2026-09-26) many open ALTA/MEDIA alerts on
--- a line while every KPI tile stayed green. Only 3 of 11 templates were
--- KPI-linked (D25), so most generated alerts never touched a KPI at all.
--- This migration links 10 of the 11 seed templates to a KPI, each with its
--- own reading range (`lectura_min`/`lectura_max`, in the KPI's own unit --
--- distinct from `valor_min`/`valor_max`, the alert's own displayed value
--- range, e.g. Torque is Nm but records a dph reading). The other half of
--- the Phase F fix (D30: a KPI stops recovering while an open alert linked
--- to it exists) follows in a later commit within this same migration file.
+-- Phase F (D30-D31): user reported (2026-09-26) many open ALTA/MEDIA alerts
+-- on a line while every KPI tile stayed green. Cause: an open KPI-linked
+-- alert blocks its own template (dedupe, H4/migration 20260925000005), so
+-- later shifts never re-read that KPI, and the D26 recovery pass
+-- (private.recuperar_indicadores) greens it anyway because it only knows
+-- about the KPI it just wrote, not about other open alerts still pointing
+-- at a different one. Only 3 of 11 templates were KPI-linked, so this was
+-- rare in the seed catalog but common once more alerts accumulate.
+--
+-- D31: link 10 of the 11 seed templates to a KPI, each with its own
+-- reading range (`lectura_min`/`lectura_max`, in the KPI's unit -- distinct
+-- from `valor_min`/`valor_max`, the alert's own displayed value range).
+-- D30: a KPI never recovers while an open (`estado = 'nueva'`) alert linked
+-- to it exists on the line; every shift instead re-reads it from the MOST
+-- SEVERE such alert's template range (parar over atencion, tie -> newest).
+-- Resolving still changes nothing immediately -- recovery can resume on the
+-- next shift, once no open linked alert remains.
 
 -- ---------------------------------------------------------------------------
 -- 1. plantillas_alerta.lectura_min / lectura_max (D31).
@@ -133,7 +141,81 @@ revoke execute on function public.demo_generar_alertas(uuid, int) from public, a
 grant execute on function public.demo_generar_alertas(uuid, int) to service_role;
 
 -- ---------------------------------------------------------------------------
--- 3. Backfill (D31): databases seeded before this migration (e.g. staging)
+-- 3. private.recuperar_indicadores: a KPI held by an open linked alert
+--    re-reads from that alert's template range instead of recovering (D30).
+-- ---------------------------------------------------------------------------
+
+create or replace function private.recuperar_indicadores(p_linea_id uuid, p_excluir text[] default '{}')
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  r record;
+  v_lectura_min numeric;
+  v_lectura_max numeric;
+  v_nuevo_valor numeric;
+  v_paso numeric;
+begin
+  for r in
+    select i.id, i.clave, i.valor, i.estado, i.mayor_es_mejor, i.umbral_atencion, i.umbral_parar
+    from public.indicadores i
+    where i.linea_id = p_linea_id
+      and not (i.clave = any (p_excluir))
+  loop
+    -- D30: an open alert linked to this KPI holds it -- re-read from the
+    -- MOST SEVERE such alert's template range (parar over atencion, tie ->
+    -- newest) instead of recovering it toward ok.
+    select t.lectura_min, t.lectura_max
+      into v_lectura_min, v_lectura_max
+    from public.alertas a
+    join public.plantillas_alerta t on t.titulo = a.titulo
+    where a.linea_id = p_linea_id
+      and a.estado = 'nueva'
+      and t.indicador_clave = r.clave
+    order by
+      case a.severidad when 'parar' then 0 when 'atencion' then 1 else 2 end,
+      a.creada_en desc
+    limit 1;
+
+    if found then
+      update public.indicadores
+      set valor = round((v_lectura_min + random() * (v_lectura_max - v_lectura_min))::numeric, 2),
+          actualizado_en = now()
+      where id = r.id;
+      continue;
+    end if;
+
+    if r.estado = 'parar' then
+      v_nuevo_valor := (r.umbral_parar + r.umbral_atencion) / 2;
+    elsif r.estado = 'atencion' then
+      v_paso := greatest(abs(r.umbral_atencion) * 0.02, 0.1);
+      v_nuevo_valor := case
+        when r.mayor_es_mejor then r.umbral_atencion + v_paso
+        else greatest(r.umbral_atencion - v_paso, 0)
+      end;
+    else
+      v_paso := greatest(abs(r.valor) * 0.01, 0.05) * random();
+      v_nuevo_valor := case
+        when r.mayor_es_mejor then r.valor + v_paso
+        else greatest(r.valor - v_paso, 0)
+      end;
+    end if;
+
+    update public.indicadores
+    set valor = round(v_nuevo_valor, 2),
+        actualizado_en = now()
+    where id = r.id;
+  end loop;
+end;
+$$;
+
+revoke execute on function private.recuperar_indicadores(uuid, text[]) from public;
+grant execute on function private.recuperar_indicadores(uuid, text[]) to postgres, service_role;
+
+-- ---------------------------------------------------------------------------
+-- 4. Backfill (D31): databases seeded before this migration (e.g. staging)
 --    already have all 11 templates (H4/017 backfilled the 2 missing ones by
 --    titulo); link the remaining 7 and add lectura ranges to all 10. On a
 --    fresh database this table is still empty when migrations run (seed.sql

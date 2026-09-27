@@ -293,32 +293,49 @@ is OK, not ATENCIÓN; Defectos/hora = 6 is ATENCIÓN, not PARAR).
 
 Two things move a `valor`, both server-side, both demo-only:
 
-- **A generated alert with a linked KPI (D25).** `plantillas_alerta` (the
+- **A generated alert with a linked KPI (D25/D31).** `plantillas_alerta` (the
   simulator's template catalog) can name an `indicador_clave`
-  (`fpy`/`dph`/`scrap`). When `demo_generar_alertas` picks such a template,
-  it records that alert's generated reading on the line's matching
-  indicator (`valor` + `actualizado_en`); the tile's state then follows from
-  that new `valor` automatically.
-- **A recovery reading (D26).** `demo_simular_turno` / `demo_simular_turno_linea`
+  (`fpy`/`dph`/`scrap`), together with its own `lectura_min`/`lectura_max`
+  (D31, Phase F) -- the range the KPI READING is drawn from, in the KPI's
+  own unit, separate from `valor_min`/`valor_max` (the range for the
+  alert's own displayed `valor`, in the alert's own unit -- e.g. "Torque
+  fuera de rango" displays Nm but records a `dph` reading). When
+  `demo_generar_alertas` picks such a template, it records a reading drawn
+  from `lectura_min`/`lectura_max` on the line's matching indicator (`valor`
+  + `actualizado_en`); the tile's state then follows from that new `valor`
+  automatically. 10 of the 11 seed templates are KPI-linked; only "Nivel de
+  refrigerante en rango" (severidad `ok`) stays unlinked.
+- **A recovery reading (D26/D30).** `demo_simular_turno` / `demo_simular_turno_linea`
   (shift simulation, triggered from Supabase -- see "Simulate a shift" below)
   and `demo_autoresolver` (the stale-alert auto-resolve job) both call
   `private.recuperar_indicadores` afterwards for the affected line,
-  excluding any KPI a new alert just hit: every other indicator on that
-  line moves ONE state toward OK, with a `valor` inside the new band
-  (PARAR → a value inside the ATENCIÓN band; ATENCIÓN → a value inside the
-  OK band; OK → a small, direction-safe nudge that stays OK).
+  excluding any KPI a new alert just hit. For every OTHER indicator on that
+  line:
+  - **D30 (Phase F): if an OPEN alert (`estado = 'nueva'`) linked to that KPI
+    still exists on the line**, the indicator does NOT recover -- it is
+    re-read instead, from the MOST SEVERE such alert's template
+    `lectura_min`/`lectura_max` range (PARAR over ATENCIÓN; a tie goes to
+    the newest alert). This is what keeps a KPI tile PARAR/ATENCIÓN for as
+    long as an open alert tied to it is still unresolved, instead of
+    silently greening out from under it.
+  - Otherwise, it moves ONE state toward OK, with a `valor` inside the new
+    band (PARAR → a value inside the ATENCIÓN band; ATENCIÓN → a value
+    inside the OK band; OK → a small, direction-safe nudge that stays OK).
 
-**Resolving an alert (Atendida / No aplica) never changes any KPI.**
-`resolver_alerta` only ever touches the `alertas` row it resolves; a pgTAP
-test (`supabase/tests/09_indicadores_lecturas.test.sql`) asserts every
-indicator's `valor`/`estado`/`actualizado_en` is byte-for-byte unchanged
-across both resolutions, and the mock adapter has the same assertion in
-`lib/domain/in-memory-floor-repository.test.ts`.
+**Resolving an alert (Atendida / No aplica) never changes any KPI at that
+moment.** `resolver_alerta` only ever touches the `alertas` row it resolves;
+a pgTAP test (`supabase/tests/09_indicadores_lecturas.test.sql`) asserts
+every indicator's `valor`/`estado`/`actualizado_en` is byte-for-byte
+unchanged across both resolutions, and the mock adapter has the same
+assertion in `lib/domain/in-memory-floor-repository.test.ts`. Once an
+alert that was holding a KPI (D30, above) is resolved, that KPI simply
+stops being held -- it recovers normally starting from the next shift.
 
 The mock adapter mirrors the recovery rule (every simulated shift recovers
 every KPI, since none of `ALERTAS_NUEVO_TURNO`'s two fixed alerts link to a
 `clave` today) but does not yet reproduce the KPI-linked-reading side of
-D25: its shift alerts carry no `valor`/`indicador_clave` data to record.
+D25/D31: its shift alerts carry no `valor`/`indicador_clave` data to record,
+so the D30 "held by an open alert" rule has nothing to hold there either.
 
 ## Learn More
 
