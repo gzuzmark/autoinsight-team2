@@ -449,10 +449,44 @@ async function runOfficeScenariosAtViewport(browser, viewport, allViolations) {
     await page.getByText("Programar reporte", { exact: true }).waitFor({ state: "visible" })
     await checkOverflow("oficina reportes")
 
-    if (consoleErrors.length > 0) {
-      allViolations.push(`\n== office ${name} / console errors ==`)
-      allViolations.push(...consoleErrors.map((e) => `  - ${e}`))
+    // F6: an unknown alert id must render the not-found boundary (HTTP 404),
+    // not crash or fall through to some other page.
+    const notFoundResponse = await page.goto(`${BASE_URL}/oficina/alertas/no-existe`, { waitUntil: "networkidle" })
+    if (notFoundResponse && notFoundResponse.status() !== 404) {
+      allViolations.push(`\n== office ${name} / oficina alerta no-existe ==`)
+      allViolations.push(`  - expected HTTP 404, got ${notFoundResponse.status()}`)
     }
+    await page.getByText("This page could not be found").waitFor({ state: "visible" })
+    await checkOverflow("oficina alerta no-existe")
+
+    if (consoleErrors.length > 0) {
+      // F6: two console entries are expected side effects of visiting an
+      // unknown route on purpose, not real bugs, and are filtered out
+      // precisely (never a blanket "ignore all console errors"):
+      //   1. the browser's own "Failed to load resource: 404" for the
+      //      missing route's response.
+      //   2. a Next 16 dev-mode instrumentation artifact: rendering the
+      //      not-found boundary for an async Server Component that calls
+      //      notFound() logs "Failed to execute 'measure' on
+      //      'Performance': '<Component>' cannot have a negative time
+      //      stamp." -- reproduced consistently against this exact route in
+      //      dev mode, unrelated to any application code (Next's own perf
+      //      mark, not ours).
+      const expected = [/failed to load resource.*404/i, /cannot have a negative time stamp/i]
+      const unexpected = consoleErrors.filter((e) => !expected.some((re) => re.test(e)))
+      if (unexpected.length > 0) {
+        allViolations.push(`\n== office ${name} / console errors ==`)
+        allViolations.push(...unexpected.map((e) => `  - ${e}`))
+      }
+    }
+  } catch (err) {
+    // F5: unlike this used to be a bare try/finally, so one timed-out
+    // waitFor on a single office page would propagate out of main's
+    // viewport loop and skip every remaining viewport and scenario. Catch
+    // it, record it, and let main() continue with the rest.
+    allViolations.push(`\n== office ${name} ==`)
+    allViolations.push(`  - ${err.message}`)
+    console.log(`office ${name}: FAILED`)
   } finally {
     await page.close()
   }
@@ -492,11 +526,14 @@ async function runOfficeDarkModeScenario(browser, allViolations) {
         return 0.2126 * r + 0.7152 * g + 0.0722 * b
       }
 
-      // Any card-like container (rounded box with a border, as shadcn Card
-      // renders) should keep a light (near-white) background.
-      const card = document.querySelector("main [class*='rounded']")
+      // F4: target the shadcn Card primitive deterministically via its own
+      // data-slot marker (see components/ui/card.tsx), instead of "first
+      // element with 'rounded' in its class" -- on /oficina that used to
+      // match the FilterBar's disabled <select> (also rounded) before any
+      // real Card, so the guard was reading --background, not --card.
+      const card = document.querySelector("main [data-slot='card']")
       if (!card) {
-        violations.push("no card-like element found under <main>")
+        violations.push("no Card element (data-slot='card') found under <main>")
       } else {
         const bg = getComputedStyle(card).backgroundColor
         const l = luminance(bg)
