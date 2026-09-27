@@ -4,10 +4,10 @@ import { ClipboardList, UserPlus } from "lucide-react"
 import { OfficeShell } from "@/components/oficina/office-shell"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { TorqueChart } from "@/components/oficina/torque-chart"
+import { MetricChart } from "@/components/oficina/metric-chart"
 import { AlertHistory } from "@/components/oficina/alert-history"
 import { EightDPanel } from "@/components/oficina/eight-d-panel"
-import { getAlertaPorId } from "@/lib/oficina/mock-data"
+import { getAlertaPorId, VARIANTE_POR_GRAVEDAD } from "@/lib/oficina/mock-data"
 
 // Screen 02 (Investigación de alerta, O3): one static sample alert; an
 // unknown id renders the not-found boundary (O-D4, static demo only).
@@ -35,7 +35,7 @@ export default async function AlertaPage({ params }: { params: Promise<{ id: str
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <Badge variant="destructive">{alerta.gravedad}</Badge>
+            <Badge variant={VARIANTE_POR_GRAVEDAD[alerta.gravedad]}>{alerta.gravedad}</Badge>
             <h2 className="text-xl font-bold">{alerta.titulo}</h2>
           </div>
           <div className="flex items-center gap-2">
@@ -70,11 +70,16 @@ export default async function AlertaPage({ params }: { params: Promise<{ id: str
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle>Torque en {alerta.estacion.split(" · ")[0]} · últimas 8 horas</CardTitle>
-              <CardDescription>Cada barra es una medición · rojo = sobre el límite de {alerta.limiteTorque} Nm</CardDescription>
+              <CardTitle>{alerta.metrica.titulo} · últimas 8 horas</CardTitle>
+              <CardDescription>
+                Cada barra es una medición · rojo ={" "}
+                {alerta.metrica.direccion === "arriba"
+                  ? `sobre el límite de ${alerta.metrica.limite} ${alerta.metrica.unidad}`
+                  : `bajo el objetivo de ${alerta.metrica.limite} ${alerta.metrica.unidad}`}
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <TorqueChart serie={alerta.torqueSerie} limite={alerta.limiteTorque} />
+              <MetricChart serie={alerta.metrica.serie} limite={alerta.metrica.limite} direccion={alerta.metrica.direccion} />
             </CardContent>
           </Card>
 

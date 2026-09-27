@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  barraFueraDeLimite,
   fpyBarEstado,
   fpyBarHeightPercent,
   heatmapBucket,
@@ -49,6 +50,23 @@ describe("fpyBarHeightPercent (pure helper: FPY -> visible chart bar height)", (
 
   it("scales linearly between the minimum and maximum for a mid-range value", () => {
     expect(fpyBarHeightPercent(90)).toBeCloseTo(57.5, 5)
+  })
+})
+
+describe("barraFueraDeLimite (pure helper: is a metric value a limit breach, direction-aware, F2)", () => {
+  it("flags a value above the limit as a breach when the direction is 'arriba' (torque, defects/h, scrap)", () => {
+    expect(barraFueraDeLimite(12.5, 10, "arriba")).toBe(true)
+    expect(barraFueraDeLimite(8, 10, "arriba")).toBe(false)
+  })
+
+  it("flags a value below the limit as a breach when the direction is 'abajo' (FPY)", () => {
+    expect(barraFueraDeLimite(87.2, 92, "abajo")).toBe(true)
+    expect(barraFueraDeLimite(95, 92, "abajo")).toBe(false)
+  })
+
+  it("does not flag a value exactly at the limit as a breach in either direction", () => {
+    expect(barraFueraDeLimite(10, 10, "arriba")).toBe(false)
+    expect(barraFueraDeLimite(92, 92, "abajo")).toBe(false)
   })
 })
 
@@ -116,6 +134,22 @@ describe("mock data shape and invariants", () => {
         PARETO_DEFECTOS[i - 1].porcentajeAcumulado,
       )
     }
+  })
+
+  it("gives every alert its own metric metadata (title, unit, limit, direction) instead of a fixed torque label (F2)", () => {
+    for (const a of ALERTAS) {
+      expect(a.metrica.serie.length).toBeGreaterThan(0)
+      expect(["arriba", "abajo"]).toContain(a.metrica.direccion)
+      expect(a.metrica.titulo.length).toBeGreaterThan(0)
+      expect(a.metrica.unidad.length).toBeGreaterThan(0)
+    }
+  })
+
+  it("marks the FPY alert's breach direction as 'abajo' and the torque/defect/scrap alerts as 'arriba' (F2)", () => {
+    expect(getAlertaPorId("fpy-por-debajo-l3-e4")!.metrica.direccion).toBe("abajo")
+    expect(getAlertaPorId("torque-fuera-de-rango-l3-e7")!.metrica.direccion).toBe("arriba")
+    expect(getAlertaPorId("defectos-por-hora-l3-e2")!.metrica.direccion).toBe("arriba")
+    expect(getAlertaPorId("scrap-por-encima-l2-e3")!.metrica.direccion).toBe("arriba")
   })
 
   it("has at least one open alert with an ALTA severity", () => {

@@ -1,13 +1,7 @@
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import type { AlertaOficina } from "@/lib/oficina/mock-data"
-
-const VARIANTE_POR_GRAVEDAD: Record<AlertaOficina["gravedad"], "destructive" | "default" | "secondary"> = {
-  ALTA: "destructive",
-  MEDIA: "default",
-  BAJA: "secondary",
-}
+import { VARIANTE_POR_GRAVEDAD, type AlertaOficina } from "@/lib/oficina/mock-data"
 
 const COLOR_ESTADO: Record<AlertaOficina["estado"], string> = {
   Nueva: "text-indigo-700",

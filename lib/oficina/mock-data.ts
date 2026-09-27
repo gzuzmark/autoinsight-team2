@@ -111,6 +111,28 @@ export type EventoHistorial = {
   estado: EstadoUmbral | "info"
 }
 
+/** F2: an alert's chart breach direction. "arriba" = a value above the limit
+ * is the breach (torque, defects/hour, scrap); "abajo" = a value below the
+ * limit is the breach (FPY, or any target-minimum metric). */
+export type DireccionLimite = "arriba" | "abajo"
+
+/** F2: metric metadata for the alert's chart -- title, unit, limit and
+ * breach direction -- so the chart is driven by the alert's own metric
+ * instead of a fixed "torque in Nm, above limit" assumption. */
+export type MetricaAlerta = {
+  titulo: string
+  unidad: string
+  limite: number
+  direccion: DireccionLimite
+  serie: number[]
+}
+
+/** F2: whether a single measurement breaches its limit, direction-aware. A
+ * value exactly at the limit is never a breach in either direction. */
+export function barraFueraDeLimite(valor: number, limite: number, direccion: DireccionLimite): boolean {
+  return direccion === "arriba" ? valor > limite : valor < limite
+}
+
 export type AlertaOficina = {
   id: string
   gravedad: Severidad
@@ -122,8 +144,7 @@ export type AlertaOficina = {
   turno: string
   estado: EstadoAlerta
   hace: string
-  torqueSerie: number[]
-  limiteTorque: number
+  metrica: MetricaAlerta
   historial: EventoHistorial[]
   ocho_d: { paso: string; completado: boolean }[]
   ocho_d_progreso: string
@@ -141,8 +162,13 @@ export const ALERTAS: AlertaOficina[] = [
     turno: "Mañana",
     estado: "Nueva",
     hace: "2 min",
-    torqueSerie: [8.1, 8.4, 8.9, 9.2, 10.3, 10.8, 11.6, 12.5],
-    limiteTorque: 10,
+    metrica: {
+      titulo: "Torque en E7",
+      unidad: "Nm",
+      limite: 10,
+      direccion: "arriba",
+      serie: [8.1, 8.4, 8.9, 9.2, 10.3, 10.8, 11.6, 12.5],
+    },
     historial: [
       { hora: "08:12", titulo: "Alerta creada automáticamente", detalle: "Torque 12,5 Nm supera el límite de 10 Nm", estado: "parar" },
       { hora: "08:15", titulo: "Vista por Ana Ríos en planta", detalle: "Desde la tablet de la Línea 3", estado: "info" },
@@ -169,8 +195,13 @@ export const ALERTAS: AlertaOficina[] = [
     turno: "Mañana",
     estado: "Nueva",
     hace: "5 min",
-    torqueSerie: [90, 89, 88.5, 88, 87.8, 87.5, 87.3, 87.2],
-    limiteTorque: 92,
+    metrica: {
+      titulo: "FPY en E4",
+      unidad: "%",
+      limite: 92,
+      direccion: "abajo",
+      serie: [90, 89, 88.5, 88, 87.8, 87.5, 87.3, 87.2],
+    },
     historial: [
       { hora: "07:50", titulo: "Alerta creada automáticamente", detalle: "FPY 87,2 % por debajo del objetivo de 92 %", estado: "parar" },
     ],
@@ -194,8 +225,13 @@ export const ALERTAS: AlertaOficina[] = [
     turno: "Mañana",
     estado: "Atendida",
     hace: "18 min",
-    torqueSerie: [4, 4.2, 4.6, 5, 5.4, 5.8, 6, 6.1],
-    limiteTorque: 4,
+    metrica: {
+      titulo: "Defectos por hora en E2",
+      unidad: "defectos/h",
+      limite: 4,
+      direccion: "arriba",
+      serie: [4, 4.2, 4.6, 5, 5.4, 5.8, 6, 6.1],
+    },
     historial: [
       { hora: "07:20", titulo: "Alerta creada automáticamente", detalle: "Defectos 6,1/hora supera el límite de 4/hora", estado: "parar" },
       { hora: "07:38", titulo: "Marcada como Atendida", detalle: "Beto Cruz · 18 min después", estado: "ok" },
@@ -214,8 +250,13 @@ export const ALERTAS: AlertaOficina[] = [
     turno: "Mañana",
     estado: "Nueva",
     hace: "41 min",
-    torqueSerie: [2, 2.1, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8],
-    limiteTorque: 2,
+    metrica: {
+      titulo: "Scrap en E3",
+      unidad: "%",
+      limite: 2,
+      direccion: "arriba",
+      serie: [2, 2.1, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8],
+    },
     historial: [
       { hora: "06:41", titulo: "Alerta creada automáticamente", detalle: "Scrap 2,8 % supera el objetivo de 2 %", estado: "parar" },
     ],
@@ -226,6 +267,17 @@ export const ALERTAS: AlertaOficina[] = [
 
 export function getAlertaPorId(id: string): AlertaOficina | undefined {
   return ALERTAS.find((a) => a.id === id)
+}
+
+/** F3: severity -> badge variant, shared by the latest-alerts table and the
+ * alert investigation page so the same alert never shows a different
+ * severity color on the two screens. */
+export type VarianteGravedad = "destructive" | "default" | "secondary"
+
+export const VARIANTE_POR_GRAVEDAD: Record<Severidad, VarianteGravedad> = {
+  ALTA: "destructive",
+  MEDIA: "default",
+  BAJA: "secondary",
 }
 
 export type EstadoReporte = "Programado" | "Manual" | "Pausado"

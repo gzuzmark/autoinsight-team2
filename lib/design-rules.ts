@@ -49,7 +49,12 @@ export const ALL_RULES: Rule[] = [...FLOOR_ONLY_RULES, ...STANDARD_SCALE_RULES]
  * `path.join` produces when walking the real filesystem. */
 export function isOfficePath(file: string): boolean {
   const normalized = file.split(path.sep).join("/")
-  return normalized.startsWith("app/oficina/") || normalized.startsWith("components/oficina/") || normalized.startsWith("app/oficina") || normalized.startsWith("components/oficina")
+  return (
+    normalized === "app/oficina" ||
+    normalized.startsWith("app/oficina/") ||
+    normalized === "components/oficina" ||
+    normalized.startsWith("components/oficina/")
+  )
 }
 
 export function rulesForFile(file: string): Rule[] {

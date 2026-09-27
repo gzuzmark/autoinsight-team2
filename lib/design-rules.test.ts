@@ -126,6 +126,11 @@ describe("O-D3: office paths are exempt from floor-only rules but not the standa
     expect(hits).toEqual([])
   })
 
+  it("rejects lookalike prefixes that only share the leading letters, not a real office path (F1)", () => {
+    expect(isOfficePath("app/oficinas-legacy/x.tsx")).toBe(false)
+    expect(isOfficePath("components/oficina-foo.tsx")).toBe(false)
+  })
+
   it("still forbids sub-24px named text size on a plant-floor file", () => {
     const hits = scanForViolations("app/planta/page.tsx", `<p className="text-sm">Hola</p>`)
     expect(hits.length).toBeGreaterThan(0)
