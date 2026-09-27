@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { LogOut } from "lucide-react"
+import Link from "next/link"
+import { LogOut, LayoutGrid } from "lucide-react"
 import { focusTargetAfterResolve } from "@/lib/domain/alerts"
 import { formatearHora, type Alerta } from "@/lib/mock-data"
 import { useApp } from "./app-provider"
@@ -132,6 +133,13 @@ export function Dashboard() {
               </span>
               <span className="whitespace-nowrap text-2xl font-bold text-neutral-900">{usuario.nombre}</span>
             </div>
+            <Link
+              href="/"
+              className="flex h-22 shrink-0 items-center justify-center gap-3 whitespace-nowrap rounded-2xl border-4 border-neutral-300 px-6 text-2xl font-black text-neutral-900"
+            >
+              <LayoutGrid className="h-9 w-9" strokeWidth={2.5} aria-hidden />
+              Cambiar vista
+            </Link>
             <button
               type="button"
               onClick={salir}

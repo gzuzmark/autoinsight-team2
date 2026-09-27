@@ -23,6 +23,14 @@ ordinary page. The floor rules (text ≥ 24px, touch targets ≥ 88px, color +
 shape + word, no opacity/transitions/animations) apply at EVERY size, kiosk
 or not. See the README "Responsive layout and kiosk mode" section.
 
+The plant-floor tablet app lives at `/planta` (moved from `/`, O-D1); `/` is
+now the view selector and still follows the floor rules (it is the tablet's
+entry point). `/oficina/**` is a separate desk view (Resumen, alert
+investigation, Reportes) and is exempt from the floor-only rules D5/D11/D12
+(no numeric KPI values, 24px text, 88px targets, no gray text) — see
+`odd/tasks/autoinsight-office.md` (O-D3) — but still follows the standard
+Tailwind scale below.
+
 ## Stack
 
 Next 16.3.3 (App Router), React 19, TypeScript 5.7 strict, Tailwind 4,
@@ -140,7 +148,9 @@ before commit.
 
 No arbitrary pixel values for size or spacing anywhere in `components/**` or
 `app/**` (`components/ui/**` — third-party shadcn primitives — and
-`*.test.*` files are exempt). Use the standard scale. Breakpoint variants
+`*.test.*` files are exempt). This applies to `app/oficina/**` and
+`components/oficina/**` too: they are exempt from the floor-only rules (min
+text size, gray text) but not from the standard scale. Use the standard scale. Breakpoint variants
 (`md:`, `lg:`, …) and the `kiosk:` custom variant are fine to combine with
 any of these — only the underlying value must stay on the standard scale
 (e.g. `kiosk:grid-cols-3`, `kiosk:h-22` are fine; `kiosk:h-[88px]` is not):

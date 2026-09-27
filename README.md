@@ -20,7 +20,20 @@ corepack pnpm dev --port 3100
 
 Open [http://localhost:3100](http://localhost:3100) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Routes
+
+- `/` -- view selector ("¿Cómo vas a trabajar hoy?"): choose Oficina or Planta.
+  Follows the plant-floor design rules (it is the tablet's entry point).
+- `/planta` -- the plant-floor tablet app (login, PIN, dashboard, alerts). This
+  is the app that used to live at `/`; floor tablets must be pointed at
+  `/planta` directly. You can start editing it by modifying `app/planta/page.tsx`.
+- `/oficina` -- office desk view: Resumen de planta (KPIs, FPY trend, defect
+  Pareto, alert heatmap, latest alerts). Not subject to the floor design rules
+  (D5/D11/D12) -- see `app/oficina/**` and `components/oficina/**`.
+- `/oficina/alertas/[id]` -- alert investigation screen (static sample data).
+- `/oficina/reportes` -- report list and "Programar reporte" form.
+
+The page auto-updates as you edit the file.
 
 Before committing, run:
 
@@ -40,12 +53,17 @@ must be run separately.
 `corepack pnpm test:ui` (`scripts/ui-check.mjs`, Playwright driving system
 Chrome — no browser download) exercises login, PIN, dashboard (first visit),
 alert detail, dashboard (second visit / since-last-visit strip) and dashboard
-after resolving an alert, at four viewports (kiosk 1280x800, MacBook 1512x790,
-tablet portrait 768x1024, phone 390x844), and fails on horizontal overflow,
-document scroll at kiosk size, text under 24px, touch targets under 88px,
-clipped content, an unreachable alert card/overflow line, or console errors.
-It runs the same way against either data source (`DATA_SOURCE=mock`, the
-default, or `DATA_SOURCE=supabase` against a running local stack).
+after resolving an alert on `/planta`, at four viewports (kiosk 1280x800,
+MacBook 1512x790, tablet portrait 768x1024, phone 390x844), and fails on
+horizontal overflow, document scroll at kiosk size, text under 24px, touch
+targets under 88px, clipped content, an unreachable alert card/overflow line,
+or console errors. It runs the same way against either data source
+(`DATA_SOURCE=mock`, the default, or `DATA_SOURCE=supabase` against a running
+local stack). It also runs an office smoke (`/`, `/oficina`,
+`/oficina/alertas/<id>`, `/oficina/reportes`) that checks for horizontal
+overflow, console errors, and the three navigation links between the
+selector, office, and floor apps -- office pages are not held to the floor's
+24px/88px rules.
 
 ## Environment variables
 

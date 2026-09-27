@@ -275,7 +275,7 @@ async function runScenariosAtViewport(browser, viewport, allViolations) {
   }
 
   try {
-    await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle" })
+    await page.goto(`${BASE_URL}/planta`, { waitUntil: "networkidle" })
     await irAvatares()
     await check("login")
 
@@ -355,7 +355,7 @@ async function runAutoRefreshScenario(browser, allViolations) {
 
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
   try {
-    await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle" })
+    await page.goto(`${BASE_URL}/planta`, { waitUntil: "networkidle" })
     await page.getByRole("button", { name: /Ana Ríos/ }).click()
     await page.getByText("Ingresa tu PIN").waitFor({ state: "visible" })
     for (const d of "1234") await page.getByRole("button", { name: d, exact: true }).click()

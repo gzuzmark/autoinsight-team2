@@ -2,6 +2,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
 import { ESTILOS } from "./status"
+import { isOfficePath, scanForViolations } from "./design-rules"
 
 // Guards D4-D13 (see odd/tasks/autoinsight-port.md) so a future change that
 // violates a floor design rule fails fast in CI, instead of only being
@@ -94,46 +95,50 @@ function listSourceFiles(dir: string): string[] {
 
 const SCANNED_FILES = [...listSourceFiles("components"), ...listSourceFiles("app")]
 
-type Rule = { name: string; pattern: RegExp }
-
-const FORBIDDEN_RULES: Rule[] = [
-  { name: "opacity utility (D12: no opacity)", pattern: /\bopacity-\d+\b/ },
-  {
-    name: "alpha color suffix like /25 (D12: no alpha colors)",
-    pattern: /\b(?:bg|text|border|ring|shadow|from|to|via)-[\w-]+\/\d{1,3}\b/,
-  },
-  { name: "transition utility (D12: no transitions)", pattern: /\btransition(?:-[\w-]+)?\b/ },
-  { name: "animate- utility (D12: no animations)", pattern: /\banimate-[\w-]+\b/ },
-  { name: "active:scale utility (D12: no press-scale motion)", pattern: /\bactive:scale-[\w-]+\b/ },
-  { name: "tw-animate-css reference (D12: dependency removed)", pattern: /tw-animate-css/ },
-  {
-    name: "arbitrary text size (use the standard Tailwind text-* scale only)",
-    pattern: /text-\[(?!#)[^\]]*\]/,
-  },
-  { name: "sub-24px named text size (D11: readable text >= 24px)", pattern: /\btext-(?:xs|sm|base|lg|xl)\b/ },
-  {
-    name: "muted/gray text color (D12: no letra apagada)",
-    pattern: /\btext-neutral-[3-8]00\b|\btext-gray-\d{2,3}\b/,
-  },
-  {
-    name: "arbitrary width/height/size utility (use the standard spacing scale only)",
-    pattern: /\b(?:min-w|max-w|min-h|max-h|w|h|size)-\[[^\]]+\]/,
-  },
-]
-
 describe("Source scan: forbidden floor-rule violations (components/**, app/**, excluding ui/ and *.test.*)", () => {
   it.each(SCANNED_FILES)("%s has no forbidden pattern", (file) => {
     const content = fs.readFileSync(path.join(ROOT, file), "utf-8")
-    const lines = content.split("\n")
-    const hits: string[] = []
-    for (const rule of FORBIDDEN_RULES) {
-      lines.forEach((line, i) => {
-        if (rule.pattern.test(line)) {
-          hits.push(`${file}:${i + 1}: ${rule.name} -> "${line.trim().slice(0, 100)}"`)
-        }
-      })
-    }
+    const hits = scanForViolations(file, content)
     expect(hits, hits.join("\n")).toEqual([])
+  })
+})
+
+describe("O-D3: office paths are exempt from floor-only rules but not the standard-scale rules", () => {
+  it("recognizes app/oficina/** and components/oficina/** as office paths", () => {
+    expect(isOfficePath("app/oficina/page.tsx")).toBe(true)
+    expect(isOfficePath("components/oficina/sidebar.tsx")).toBe(true)
+    expect(isOfficePath(path.join("app", "oficina", "alertas", "page.tsx"))).toBe(true)
+  })
+
+  it("does not treat plant-floor or other paths as office paths", () => {
+    expect(isOfficePath("app/planta/page.tsx")).toBe(false)
+    expect(isOfficePath("components/dashboard.tsx")).toBe(false)
+    expect(isOfficePath("app/page.tsx")).toBe(false)
+  })
+
+  it("allows sub-24px named text size in an office file (floor-only rule exempted)", () => {
+    const hits = scanForViolations("app/oficina/page.tsx", `<p className="text-sm">Hola</p>`)
+    expect(hits).toEqual([])
+  })
+
+  it("allows muted/gray text in an office file (floor-only rule exempted)", () => {
+    const hits = scanForViolations("components/oficina/kpi-card.tsx", `<span className="text-neutral-500">2.3%</span>`)
+    expect(hits).toEqual([])
+  })
+
+  it("still forbids sub-24px named text size on a plant-floor file", () => {
+    const hits = scanForViolations("app/planta/page.tsx", `<p className="text-sm">Hola</p>`)
+    expect(hits.length).toBeGreaterThan(0)
+  })
+
+  it("still forbids an arbitrary pixel height in an office file (standard-scale rule not exempted)", () => {
+    const hits = scanForViolations("app/oficina/page.tsx", `<div className="h-[88px]" />`)
+    expect(hits.length).toBeGreaterThan(0)
+  })
+
+  it("still forbids an arbitrary pixel text size in an office file (standard-scale rule not exempted)", () => {
+    const hits = scanForViolations("components/oficina/chart.tsx", `<span className="text-[13px]" />`)
+    expect(hits.length).toBeGreaterThan(0)
   })
 })
 
