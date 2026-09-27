@@ -102,9 +102,9 @@ select ok(
 -- formatting of the composite type's text representation.
 -- The KPI values only match the seed on a freshly seeded database. Once
 -- readings are recorded (simulated shifts on a shared DB such as staging),
--- some indicador is updated well after the others; skip instead of failing.
+-- indicadores are updated well after the plant was seeded; skip instead of failing.
 select case
-  when (select max(actualizado_en) - min(actualizado_en) from public.indicadores) < interval '1 minute'
+  when (select max(actualizado_en) from public.indicadores) < (select min(creada_en) from public.plantas) + interval '1 minute'
   then collect_tap(
   is(
     (select valor from public.indicadores

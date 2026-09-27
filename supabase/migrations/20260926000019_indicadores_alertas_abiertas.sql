@@ -24,15 +24,6 @@ alter table public.plantillas_alerta
   add column lectura_min numeric,
   add column lectura_max numeric;
 
--- Both null or both set with min <= max; required (both set) whenever
--- indicador_clave is set, since demo_generar_alertas (below) needs a range
--- to draw the recorded KPI reading from.
-alter table public.plantillas_alerta
-  add constraint plantillas_alerta_lectura_check check (
-    (lectura_min is null) = (lectura_max is null)
-    and (lectura_min is null or lectura_min <= lectura_max)
-    and (indicador_clave is null or lectura_min is not null)
-  );
 
 -- ---------------------------------------------------------------------------
 -- 2. demo_generar_alertas: record the reading from lectura_min/lectura_max,
@@ -242,3 +233,19 @@ from (values
 where t.titulo = v.titulo
   and exists (select 1 from public.plantillas_alerta)
   and t.lectura_min is distinct from v.lectura_min;
+
+-- ---------------------------------------------------------------------------
+-- 5. Reading-range rule, added AFTER the backfill: on a database seeded before
+--    this migration, templates linked by 017 have no range until section 4
+--    fills it, so adding the CHECK first fails (found on the staging project).
+-- ---------------------------------------------------------------------------
+
+-- Both null or both set with min <= max; required (both set) whenever
+-- indicador_clave is set, since demo_generar_alertas (section 2) needs a range
+-- to draw the recorded KPI reading from.
+alter table public.plantillas_alerta
+  add constraint plantillas_alerta_lectura_check check (
+    (lectura_min is null) = (lectura_max is null)
+    and (lectura_min is null or lectura_min <= lectura_max)
+    and (indicador_clave is null or lectura_min is not null)
+  );
