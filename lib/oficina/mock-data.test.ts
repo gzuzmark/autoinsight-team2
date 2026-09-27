@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   fpyBarEstado,
+  fpyBarHeightPercent,
   heatmapBucket,
   reporteVariante,
   ALERTAS,
@@ -25,6 +26,29 @@ describe("fpyBarEstado (pure helper: FPY 30-day bar color by threshold)", () => 
   it("returns 'parar' below 90", () => {
     expect(fpyBarEstado(89.9)).toBe("parar")
     expect(fpyBarEstado(0)).toBe("parar")
+  })
+})
+
+describe("fpyBarHeightPercent (pure helper: FPY -> visible chart bar height)", () => {
+  it("maps 100% FPY to the maximum bar height", () => {
+    expect(fpyBarHeightPercent(100)).toBe(100)
+  })
+
+  it("maps 80% FPY (the bottom of the visible range) to the minimum bar height", () => {
+    expect(fpyBarHeightPercent(80)).toBe(15)
+  })
+
+  it("clamps anything below 80% to the same minimum bar height (never an invisible bar)", () => {
+    expect(fpyBarHeightPercent(0)).toBe(15)
+    expect(fpyBarHeightPercent(79)).toBe(15)
+  })
+
+  it("clamps anything above 100% to the maximum bar height", () => {
+    expect(fpyBarHeightPercent(105)).toBe(100)
+  })
+
+  it("scales linearly between the minimum and maximum for a mid-range value", () => {
+    expect(fpyBarHeightPercent(90)).toBeCloseTo(57.5, 5)
   })
 })
 
@@ -64,6 +88,19 @@ describe("mock data shape and invariants", () => {
       expect(punto.fpy).toBeGreaterThan(0)
       expect(punto.fpy).toBeLessThanOrEqual(100)
     }
+  })
+
+  it("mixes all three FPY threshold states across the 30-day trend (mirrors the mockup's blue/orange/red mix, not an almost-all-red trend)", () => {
+    const estados = FPY_TENDENCIA.map((p) => fpyBarEstado(p.fpy))
+    const contar = (estado: ReturnType<typeof fpyBarEstado>) => estados.filter((e) => e === estado).length
+    expect(contar("ok")).toBeGreaterThanOrEqual(10)
+    expect(contar("atencion")).toBeGreaterThanOrEqual(5)
+    expect(contar("parar")).toBeGreaterThanOrEqual(5)
+  })
+
+  it("ends the FPY trend on a run of 'parar' days, like the mockup's declining tail", () => {
+    const ultimos = FPY_TENDENCIA.slice(-3).map((p) => fpyBarEstado(p.fpy))
+    expect(ultimos.every((e) => e === "parar")).toBe(true)
   })
 
   it("orders the named defect causes by descending count (the trailing 'Otros' catch-all is exempt)", () => {

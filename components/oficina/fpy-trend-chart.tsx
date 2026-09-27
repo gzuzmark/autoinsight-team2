@@ -1,4 +1,4 @@
-import { fpyBarEstado, type PuntoFpy } from "@/lib/oficina/mock-data"
+import { fpyBarEstado, fpyBarHeightPercent, type PuntoFpy } from "@/lib/oficina/mock-data"
 
 // Plain-div bar chart (no charting library): each bar's height is a
 // percentage of the container (inline style, not an arbitrary Tailwind
@@ -17,7 +17,7 @@ export function FpyTrendChart({ puntos }: { puntos: PuntoFpy[] }) {
         <div
           key={p.dia}
           className={`w-full rounded-t-sm ${COLOR_POR_ESTADO[fpyBarEstado(p.fpy)]}`}
-          style={{ height: `${Math.max(6, p.fpy)}%` }}
+          style={{ height: `${fpyBarHeightPercent(p.fpy)}%` }}
           title={`Día ${p.dia}: ${p.fpy}% FPY`}
         />
       ))}

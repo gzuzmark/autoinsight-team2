@@ -57,6 +57,7 @@ async function main() {
       await runOfficeScenariosAtViewport(browser, viewport, allViolations)
     }
     await runOfficeNavigationScenario(browser, allViolations)
+    await runOfficeDarkModeScenario(browser, allViolations)
     await runAutoRefreshScenario(browser, allViolations)
   } finally {
     await browser.close()
@@ -452,6 +453,81 @@ async function runOfficeScenariosAtViewport(browser, viewport, allViolations) {
       allViolations.push(`\n== office ${name} / console errors ==`)
       allViolations.push(...consoleErrors.map((e) => `  - ${e}`))
     }
+  } finally {
+    await page.close()
+  }
+}
+
+// O6 regression guard: the office desk view is light-only, but a leftover
+// `@media (prefers-color-scheme: dark)` rule used to swap every shadcn
+// token to the dark palette whenever the OS was in Dark appearance, making
+// office cards render dark on the light shell and the header title render
+// white-on-white. Checked once (not per viewport -- it needs no login and
+// one viewport is enough to catch a regression) by emulating a dark OS
+// color scheme and asserting the rendered card background and header title
+// color stay light-theme.
+async function runOfficeDarkModeScenario(browser, allViolations) {
+  console.log("\n--- office dark-mode regression guard (prefers-color-scheme: dark) ---")
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, colorScheme: "dark" })
+  try {
+    await page.goto(`${BASE_URL}/oficina`, { waitUntil: "networkidle" })
+    await page.getByRole("heading", { name: "Resumen de planta" }).waitFor({ state: "visible" })
+
+    const result = await page.evaluate(() => {
+      const violations = []
+
+      // getComputedStyle can serialize a color in a non-sRGB CSS Color 4
+      // notation (e.g. `lab(100 0 0)` for a color defined via oklch()), so a
+      // naive regex over the numbers would misread it as raw RGB. Round-trip
+      // through a 1x1 canvas instead: canvas fillStyle always normalizes to
+      // sRGB regardless of the input color space.
+      function luminance(cssColor) {
+        const canvas = document.createElement("canvas")
+        canvas.width = canvas.height = 1
+        const ctx = canvas.getContext("2d")
+        if (!ctx) return null
+        ctx.fillStyle = cssColor
+        ctx.fillRect(0, 0, 1, 1)
+        const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+      }
+
+      // Any card-like container (rounded box with a border, as shadcn Card
+      // renders) should keep a light (near-white) background.
+      const card = document.querySelector("main [class*='rounded']")
+      if (!card) {
+        violations.push("no card-like element found under <main>")
+      } else {
+        const bg = getComputedStyle(card).backgroundColor
+        const l = luminance(bg)
+        if (l === null || l < 200) {
+          violations.push(`card background is not light-theme: ${bg} (luminance ${l})`)
+        }
+      }
+
+      const heading = document.querySelector("h1")
+      if (!heading) {
+        violations.push("no <h1> header title found")
+      } else {
+        const color = getComputedStyle(heading).color
+        const l = luminance(color)
+        if (l === null || l > 100) {
+          violations.push(`header title is not dark/high-contrast text: ${color} (luminance ${l})`)
+        }
+      }
+
+      return violations
+    })
+
+    if (result.length > 0) {
+      allViolations.push(`\n== office dark-mode regression guard ==`)
+      allViolations.push(...result.map((v) => `  - ${v}`))
+    }
+    console.log(`office dark-mode: ${result.length === 0 ? "OK" : `${result.length} violation(s)`}`)
+  } catch (err) {
+    allViolations.push(`\n== office dark-mode regression guard ==`)
+    allViolations.push(`  - ${err.message}`)
+    console.log("office dark-mode: FAILED")
   } finally {
     await page.close()
   }

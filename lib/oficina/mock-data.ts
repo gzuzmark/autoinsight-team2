@@ -44,15 +44,29 @@ export const KPIS: Kpi[] = [
 
 export type PuntoFpy = { dia: number; fpy: number }
 
-/** 30 days of FPY trend for Línea 3, oscillating so the bars visibly cross
- * all three thresholds (mirrors the mockup's mixed blue/orange/red bars). */
-export const FPY_TENDENCIA: PuntoFpy[] = Array.from({ length: 30 }, (_, i) => {
-  const dia = i + 1
-  const base = 94 - i * 0.6
-  const onda = Math.sin(i / 2.3) * 4
-  const fpy = Math.max(78, Math.min(97, Math.round((base + onda) * 10) / 10))
-  return { dia, fpy }
-})
+/** 30 days of hand-authored FPY for Línea 3: a realistic mix across all
+ * three thresholds (roughly half ok, a third atención, the rest parar),
+ * closing on a short run of parar days -- mirrors the mockup's mixed
+ * blue/orange/red bars rather than an almost-all-red trend. */
+const FPY_VALORES: number[] = [
+  95, 93, 96, 91, 94, 97, 90, 88, 93, 95, 92, 91, 96, 94, 90, 93, 89, 95, 91,
+  97, 94, 92, 90, 93, 91, 88, 88, 87, 85, 83,
+]
+
+export const FPY_TENDENCIA: PuntoFpy[] = FPY_VALORES.map((fpy, i) => ({ dia: i + 1, fpy }))
+
+/** Maps FPY onto a visible chart bar height: the 80-100% range (where all
+ * three thresholds live) is stretched onto 15-100% of the chart, so bars
+ * stay clearly readable instead of nearly flat when FPY only varies by a
+ * few points. Values outside 80-100 are clamped to the nearest end. */
+export function fpyBarHeightPercent(fpy: number): number {
+  const MIN_FPY = 80
+  const MAX_FPY = 100
+  const MIN_HEIGHT = 15
+  const MAX_HEIGHT = 100
+  const acotado = Math.min(MAX_FPY, Math.max(MIN_FPY, fpy))
+  return MIN_HEIGHT + ((acotado - MIN_FPY) / (MAX_FPY - MIN_FPY)) * (MAX_HEIGHT - MIN_HEIGHT)
+}
 
 export type DefectoPareto = { causa: string; cantidad: number; porcentajeAcumulado: number }
 
