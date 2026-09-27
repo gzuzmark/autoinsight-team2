@@ -97,8 +97,8 @@ function OpcionVista({
         href={href}
         className={
           esOscuro
-            ? "flex min-h-22 w-full items-center justify-center rounded-2xl bg-amber-500 px-6 text-2xl font-black text-neutral-900"
-            : "flex min-h-22 w-full items-center justify-center rounded-2xl bg-indigo-700 px-6 text-2xl font-black text-white"
+            ? "mt-auto flex min-h-22 w-full items-center justify-center rounded-2xl bg-amber-500 px-6 text-2xl font-black text-neutral-900"
+            : "mt-auto flex min-h-22 w-full items-center justify-center rounded-2xl bg-indigo-700 px-6 text-2xl font-black text-white"
         }
       >
         {etiquetaBoton}
