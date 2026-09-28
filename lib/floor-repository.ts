@@ -14,13 +14,30 @@ import { SupabaseFloorRepository } from "@/lib/domain/supabase-floor-repository"
  * hold state across requests within one server instance); the Supabase
  * adapter is stateless (the database is the state) but is still cached here
  * to avoid re-creating a client per request.
+ *
+ * G3 fix: Next.js's dev server compiles Route Handlers (under app/api) and
+ * Server Components (page.tsx files) as separate bundles/layers, each of
+ * which can end up with its OWN evaluation of this module -- a plain
+ * module-level `let instance` was then NOT actually shared between e.g.
+ * `POST /api/backoffice/escenario` (which mutated one instance) and
+ * `BackofficePage`'s Server Component render (which read a DIFFERENT,
+ * never-mutated instance), so the back office's "Estado de la demo"/
+ * "Cambiar turno"/"Escenarios" cards silently never reflected the action
+ * that had just run in dev mode (production's single bundle is unaffected,
+ * but dev mode is what a facilitator actually runs the session on). Reusing
+ * the value stashed on `globalThis` across module evaluations (a standard
+ * Next.js dev-mode HMR-safe-singleton pattern -- see the docs for the same
+ * fix applied to a Prisma client) makes it a true single instance again.
  */
-let instance: FloorRepository | null = null
+const GLOBAL_KEY = Symbol.for("autoinsight.floorRepository")
+type GlobalWithRepo = typeof globalThis & { [GLOBAL_KEY]?: FloorRepository }
 
 export function getFloorRepository(): FloorRepository {
-  if (instance) return instance
-  instance = createFloorRepository()
-  return instance
+  const g = globalThis as GlobalWithRepo
+  if (!g[GLOBAL_KEY]) {
+    g[GLOBAL_KEY] = createFloorRepository()
+  }
+  return g[GLOBAL_KEY]
 }
 
 function createFloorRepository(): FloorRepository {
@@ -48,5 +65,5 @@ function createFloorRepository(): FloorRepository {
  * per test instead of depending on the module-level singleton or real env
  * vars. Not used outside tests. */
 export function setFloorRepositoryForTests(repository: FloorRepository): void {
-  instance = repository
+  ;(globalThis as GlobalWithRepo)[GLOBAL_KEY] = repository
 }
