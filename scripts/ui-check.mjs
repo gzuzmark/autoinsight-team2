@@ -58,6 +58,7 @@ async function main() {
     }
     await runOfficeNavigationScenario(browser, allViolations)
     await runOfficeDarkModeScenario(browser, allViolations)
+    await runBackofficeScenario(browser, allViolations)
     await runAutoRefreshScenario(browser, allViolations)
   } finally {
     await browser.close()
@@ -601,6 +602,91 @@ async function runOfficeNavigationScenario(browser, allViolations) {
     allViolations.push(`\n== office navigation ==`)
     allViolations.push(`  - ${err.message}`)
     console.log("office navigation: FAILED")
+  } finally {
+    await page.close()
+  }
+}
+
+// G1: /backoffice smoke (D28 amendment). Without the session cookie only the
+// key form must render (no dashboard content); with BACKOFFICE_KEY it logs
+// in ONCE (one page, one POST /api/backoffice/sesion) and then reuses that
+// same logged-in page across all four viewports via setViewportSize instead
+// of a fresh goto+login per viewport -- /api/backoffice/sesion shares the
+// per-IP login throttle (D21) with /api/sesion, and this script already
+// spends 2 floor logins per viewport plus 1 office login, so an extra login
+// per viewport here would risk tripping the 10/60s window. Skipped with a
+// clear notice when BACKOFFICE_KEY is unset in the environment running this
+// script (it needs the exact same value the dev server was started with).
+async function runBackofficeScenario(browser, allViolations) {
+  console.log("\n--- backoffice (facilitator key gate) ---")
+  const key = process.env.BACKOFFICE_KEY
+  if (!key) {
+    console.log("backoffice: SKIPPED (BACKOFFICE_KEY not set in this script's environment)")
+    return
+  }
+
+  const consoleErrors = []
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
+  page.on("console", (m) => {
+    if (m.type() === "error") consoleErrors.push(m.text())
+  })
+  page.on("pageerror", (e) => consoleErrors.push("pageerror: " + e.message))
+
+  async function checkOverflow(label) {
+    const result = await page.evaluate(() => {
+      const docEl = document.documentElement
+      const violations = []
+      if (docEl.scrollWidth > docEl.clientWidth + 1) {
+        violations.push(`horizontal overflow: scrollWidth=${docEl.scrollWidth} clientWidth=${docEl.clientWidth}`)
+      }
+      return violations
+    })
+    if (result.length > 0) {
+      allViolations.push(`\n== backoffice / ${label} ==`)
+      allViolations.push(...result.map((v) => `  - ${v}`))
+    }
+    console.log(`backoffice ${label}: ${result.length === 0 ? "OK" : `${result.length} violation(s)`}`)
+  }
+
+  try {
+    await page.goto(`${BASE_URL}/backoffice`, { waitUntil: "networkidle" })
+    await page.getByLabel("Clave de facilitador").waitFor({ state: "visible" })
+    const dashboardBeforeLogin = await page.getByText("Estado de la demo").count()
+    if (dashboardBeforeLogin > 0) {
+      allViolations.push("\n== backoffice / gate ==")
+      allViolations.push("  - dashboard content rendered before login (no session cookie present)")
+    }
+    await checkOverflow("gate (kiosk)")
+
+    await page.getByLabel("Clave de facilitador").fill(key)
+    await page.getByRole("button", { name: "Entrar" }).click()
+    await page.getByRole("heading", { name: "AutoInsight · Back office" }).waitFor({ state: "visible" })
+    await page.getByText("Estado de la demo").waitFor({ state: "visible" })
+    console.log("backoffice login: OK")
+
+    for (const { name, width, height } of VIEWPORTS) {
+      await page.setViewportSize({ width, height })
+      await page.getByText("Estado de la demo").waitFor({ state: "visible" })
+      await checkOverflow(`dashboard / ${name}`)
+    }
+
+    await page.getByRole("button", { name: "Salir" }).click()
+    await page.getByLabel("Clave de facilitador").waitFor({ state: "visible" })
+    const dashboardAfterLogout = await page.getByText("Estado de la demo").count()
+    if (dashboardAfterLogout > 0) {
+      allViolations.push("\n== backoffice / logout ==")
+      allViolations.push("  - dashboard content still present after logout")
+    }
+    console.log("backoffice logout: OK (back to key form)")
+
+    if (consoleErrors.length > 0) {
+      allViolations.push("\n== backoffice / console errors ==")
+      allViolations.push(...consoleErrors.map((e) => `  - ${e}`))
+    }
+  } catch (err) {
+    allViolations.push(`\n== backoffice ==`)
+    allViolations.push(`  - ${err.message}`)
+    console.log("backoffice: FAILED")
   } finally {
     await page.close()
   }

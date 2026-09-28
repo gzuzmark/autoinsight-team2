@@ -32,6 +32,13 @@ Open [http://localhost:3100](http://localhost:3100) with your browser to see the
   (D5/D11/D12) -- see `app/oficina/**` and `components/oficina/**`.
 - `/oficina/alertas/[id]` -- alert investigation screen (static sample data).
 - `/oficina/reportes` -- report list and "Programar reporte" form.
+- `/backoffice` -- facilitator back office for guerrilla-testing sessions
+  (reset the demo, trigger a shift per line, scenarios, session log, script
+  and notes). Deliberately **not** linked from `/`, `/planta` or `/oficina`
+  -- reachable only by typing the URL, and gated server-side behind the
+  `BACKOFFICE_KEY` facilitator key (see "Environment variables" below and
+  "Simulate a shift (demo)"). `lib/backoffice/no-link-guard.test.ts` fails
+  CI if any other page ever links to it.
 
 The page auto-updates as you edit the file.
 
@@ -63,7 +70,14 @@ local stack). It also runs an office smoke (`/`, `/oficina`,
 `/oficina/alertas/<id>`, `/oficina/reportes`) that checks for horizontal
 overflow, console errors, and the three navigation links between the
 selector, office, and floor apps -- office pages are not held to the floor's
-24px/88px rules.
+24px/88px rules. It also runs a `/backoffice` smoke: without the session
+cookie it must show only the key form (no dashboard content); with
+`BACKOFFICE_KEY` set it logs in once and checks the dashboard renders with
+no horizontal overflow or console errors at all four viewports, then logs
+out and confirms it returns to the key form. That scenario is skipped with
+a clear notice when `BACKOFFICE_KEY` is unset in the environment running
+`test:ui` (it shares the login throttle with `/api/sesion`, so it signs in
+only once).
 
 ## Environment variables
 
@@ -75,6 +89,7 @@ never commit `.env.local` or a real `SUPABASE_SECRET_KEY`.
 | `DATA_SOURCE` | `mock` \| `supabase` | `mock` | Selects the `FloorRepository` adapter (D19, T7). `mock` needs nothing else below and reproduces the app's existing in-memory behavior (same users/PINs, same seed alerts) with no backend running. |
 | `SUPABASE_URL` | URL | — | Required only when `DATA_SOURCE=supabase`. Read server-side only (D20) — never sent to the browser, never `NEXT_PUBLIC_*`. Local value: `supabase status -o env` after `supabase start`. |
 | `SUPABASE_SECRET_KEY` | secret | — | Required only when `DATA_SOURCE=supabase`; the `service_role`/`sb_secret` key. Same source as above. Never commit a real value. |
+| `BACKOFFICE_KEY` | secret | — | Facilitator key for `/backoffice` (D28 amendment). Unset means the gate is **closed**: the route shows only "Back office deshabilitado: falta BACKOFFICE_KEY", never a bypass. Checked server-side only (constant-time compare, never `NEXT_PUBLIC_*`); the session cookie holds an HMAC-derived token, never the raw key. Pick any local value, e.g. `BACKOFFICE_KEY=dev-facilitador`. |
 
 To run the app against a local Supabase stack instead of mock data:
 
@@ -258,9 +273,10 @@ opacity, transitions and animations regardless of variant prefix).
 
 ## Simulate a shift (demo)
 
-"Simular turno" is no longer a button in the app (D28, E3) — the app only
-ever shows real data. A shift is triggered from Supabase itself instead,
-either with no SQL at all or with one line of SQL:
+"Simular turno" is not a button anywhere in `/planta` or `/oficina` (D28,
+E3) — those apps only ever show real data. A shift is triggered either
+from Supabase itself (no SQL at all, or one line of SQL) or from the
+protected `/backoffice` facilitator route (D28 amendment, 2026-09-28):
 
 **Without SQL, from the Supabase dashboard:**
 
@@ -282,8 +298,13 @@ scripting or for `supabase/snippets/cron_demo.sql`):
 select * from demo_simular_turno_linea('Línea 3 · Motores');
 ```
 
-Both paths run the exact same rules the old in-app button always did: if
-the line is saturated (every alert template already active), the oldest
+**From `/backoffice`** (facilitator key required, `BACKOFFICE_KEY`): the
+"Cambiar turno" card's "Simular turno" button per line calls the same
+`demo_simular_turno_linea` RPC as the two paths above (ships with G2 --
+`/backoffice` exists from G1 but that button is inert until then).
+
+All three paths run the exact same rules the old in-app button always did:
+if the line is saturated (every alert template already active), the oldest
 open template alerts are closed as "No aplica" by the system first to make
 room (K5); a generated alert linked to a KPI records that reading on the
 line's indicator (D25); and every other indicator on the line then moves

@@ -55,9 +55,10 @@ git diff --check                              # whitespace/conflict markers
 `DATA_SOURCE` defaults to `mock` and needs no other setup; see the README
 "Environment variables" section for the full table and for running the same
 check against a local Supabase stack instead (`DATA_SOURCE=supabase` in
-`.env.local`). Shift simulation (E3/D28) is triggered from Supabase only now
-(SQL function or the `demo_panel` Table Editor row) — see the README
-"Simulate a shift (demo)" section.
+`.env.local`). Shift simulation (E3/D28, amended) is triggered from
+Supabase (SQL function or the `demo_panel` Table Editor row) or from the
+protected `/backoffice` facilitator route (`BACKOFFICE_KEY`) — see the
+README "Simulate a shift (demo)" section.
 
 When a change touches `supabase/**`, also run (local Docker stack only,
 never the remote project — see the README "Supabase (local)" section):
@@ -133,11 +134,14 @@ before commit.
       AND `min-height: 800px`); below kiosk size the page scrolls vertically
       and never overflows horizontally or clips content; D4-D13 still hold
       at every size.
-- [ ] D28: no in-app shift simulation (no button, no `?demo=1`, no
-      `DEMO_ENABLED`, no `/api/demo/simular`); a shift is triggered only
-      from Supabase — `demo_simular_turno_linea(linea, cantidad)` or the
-      `demo_panel` Table Editor row — both delegating to the same
-      `private.simular_turno_en_linea` the removed button used.
+- [ ] D28 (amended 2026-09-28): no shift trigger inside `/planta` or
+      `/oficina` (no button, no `?demo=1`, no `DEMO_ENABLED`, no
+      `/api/demo/simular`). A shift may be triggered from Supabase —
+      `demo_simular_turno_linea(linea, cantidad)` or the `demo_panel` Table
+      Editor row — or from the protected `/backoffice` facilitator route
+      (env var `BACKOFFICE_KEY`, checked server-side, never client-exposed;
+      not linked from `/`, `/planta` or `/oficina`) — all three call the
+      same `private.simular_turno_en_linea` the removed floor button used.
 - [ ] D29: the dashboard auto-refreshes `GET /api/tablero` every 15s while
       logged in and the tab is visible (Page Visibility API; paused when
       hidden, refetches on becoming visible); no overlapping requests; no
