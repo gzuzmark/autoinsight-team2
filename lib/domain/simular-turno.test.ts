@@ -54,6 +54,29 @@ describe("simularTurnoLinea (mock-mode analogue of private.simular_turno_en_line
     }
   })
 
+  it("C2: an 'atencion' template lands its KPI reading in the atencion band, not parar (D25)", () => {
+    // "Nivel de adhesivo bajo" is the catalog's only "atencion" template
+    // with a linked indicator (scrap). Force it to be picked by pre-filling
+    // every OTHER template's titulo as already-active on the line.
+    const yaActivas = PLANTILLAS_TURNO.filter((t) => t.titulo !== "Nivel de adhesivo bajo").map((t, i) => ({
+      id: `preexistente-${i}`,
+      severidad: t.severidad,
+      titulo: t.titulo,
+      estacion: t.estacion,
+      timestamp: AHORA - 1000,
+      estado: "nueva" as const,
+    }))
+    const resultado = simularTurnoLinea(yaActivas, INDICADORES_BASE, 1, AHORA)
+    expect(resultado.agregadas.length).toBe(1)
+    expect(resultado.agregadas[0].titulo).toBe("Nivel de adhesivo bajo")
+
+    const scrap = resultado.indicadoresState.find((i) => i.id === "scrap")!
+    // scrap: lower-is-better, atencion > 2, parar > 3 -- the atencion band is
+    // (2, 3], strictly below the parar threshold.
+    expect(scrap.valor).toBeGreaterThan(scrap.umbralAtencion)
+    expect(scrap.valor).toBeLessThanOrEqual(scrap.umbralParar)
+  })
+
   it("is deterministic (no randomness): same input, same output", () => {
     const a = simularTurnoLinea([], INDICADORES_BASE, 2, AHORA)
     const b = simularTurnoLinea([], INDICADORES_BASE, 2, AHORA)

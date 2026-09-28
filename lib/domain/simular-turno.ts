@@ -76,7 +76,10 @@ export function simularTurnoLinea(
   }
 
   const agregadas: Alerta[] = []
-  const clavesTocadas = new Set<string>()
+  // C2 fix: track each touched indicator's OWN template severidad (was a
+  // plain Set, which lost this and always applied the parar-band formula --
+  // contradicting the D25 docstring above for an "atencion" template).
+  const clavesTocadas = new Map<string, Severidad>()
   for (let i = 0; i < objetivo; i++) {
     const candidatas = disponibles()
     if (candidatas.length === 0) break
@@ -91,12 +94,13 @@ export function simularTurnoLinea(
     }
     siguientes = [...siguientes, nueva]
     agregadas.push(nueva)
-    if (plantilla.indicadorId) clavesTocadas.add(plantilla.indicadorId)
+    if (plantilla.indicadorId) clavesTocadas.set(plantilla.indicadorId, plantilla.severidad)
   }
 
-  const indicadoresTocados = indicadoresState.map((ind) =>
-    clavesTocadas.has(ind.id) ? { ...ind, valor: valorEnBandaParar(ind), actualizadoEn: ahora } : ind,
-  )
+  const indicadoresTocados = indicadoresState.map((ind) => {
+    const severidad = clavesTocadas.get(ind.id)
+    return severidad ? { ...ind, valor: valorEnBanda(ind, severidad), actualizadoEn: ahora } : ind
+  })
   const siguienteIndicadores = indicadoresTocados.map((ind) =>
     clavesTocadas.has(ind.id) ? ind : recuperarIndicador(ind, ahora),
   )
@@ -108,10 +112,26 @@ export function simularTurnoLinea(
   }
 }
 
-/** Deterministic "fresh shift" reading: lands just past the parar
- * threshold, same direction convention as `recuperarIndicador`. */
-function valorEnBandaParar(ind: Indicador): number {
-  const { mayorEsMejor, umbralParar } = ind
-  const paso = Math.max(Math.abs(umbralParar) * 0.02, 0.2)
-  return mayorEsMejor ? Math.max(umbralParar - paso, 0) : umbralParar + paso
+/**
+ * Deterministic "fresh shift" reading, landing inside the template's OWN
+ * severity band (C2 fix, D25: a KPI-linked template's reading must fall in
+ * ITS OWN band -- an "atencion" template must not write a "parar" reading).
+ *   - "parar": just past the parar threshold (same as before this fix).
+ *   - "atencion": the midpoint between the atencion and parar thresholds
+ *     (mirrors `recuperarIndicador`'s parar->atencion step).
+ *   - "ok": not expected in practice (PLANTILLAS_TURNO's only "ok" template
+ *     is unlinked), but handled safely: a small, direction-safe nudge that
+ *     stays ok, same formula as `recuperarIndicador`'s ok case.
+ */
+function valorEnBanda(ind: Indicador, severidad: Severidad): number {
+  const { mayorEsMejor, umbralAtencion, umbralParar, valor } = ind
+  if (severidad === "parar") {
+    const paso = Math.max(Math.abs(umbralParar) * 0.02, 0.2)
+    return mayorEsMejor ? Math.max(umbralParar - paso, 0) : umbralParar + paso
+  }
+  if (severidad === "atencion") {
+    return (umbralParar + umbralAtencion) / 2
+  }
+  const paso = Math.max(Math.abs(valor) * 0.01, 0.05)
+  return mayorEsMejor ? valor + paso : Math.max(valor - paso, 0)
 }
