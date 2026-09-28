@@ -741,11 +741,21 @@ async function runBackofficeScenario(browser, allViolations) {
     }
     console.log("backoffice reiniciar demo: OK")
 
-    await page.getByRole("button", { name: "Simular turno" }).first().click()
-    await page
-      .getByRole("button", { name: "Simular turno" })
-      .first()
-      .waitFor({ state: "visible", timeout: 10_000 })
+    // C1 (RDD review G2): every line's "Simular turno" button shares the
+    // same accessible name, so a name-only locator (`.first()`) can match
+    // ANY of the 3 -- including one that was never clicked and is already
+    // idle -- and the old wait resolved instantly without ever observing
+    // completion. Target the clicked line's button specifically via
+    // data-linea (components/backoffice/backoffice-dashboard.tsx) and wait
+    // for ITS OWN label to return to idle.
+    const lineaTurno = "Línea 3 · Motores"
+    const botonTurno = page.locator(`[data-linea="${lineaTurno}"]`).getByRole("button", { name: /Simular turno|Simulando…/ })
+    await botonTurno.click()
+    await botonTurno.getByText("Simulando…").waitFor({ state: "visible", timeout: 5_000 }).catch(() => {})
+    // 20s, not 10s: this back-office route can be this test run's first hit
+    // (Next dev compiles a route handler on first request -- can take
+    // several seconds on its own, on top of the actual work).
+    await botonTurno.filter({ hasText: "Simular turno" }).waitFor({ state: "visible", timeout: 20_000 })
     const turnoAlerts = await visibleAlertTexts()
     if (turnoAlerts.length > 0) {
       allViolations.push("\n== backoffice / simular turno ==")
@@ -753,6 +763,32 @@ async function runBackofficeScenario(browser, allViolations) {
     }
     console.log("backoffice simular turno: OK")
     await checkOverflow("after demo actions")
+
+    // G3/C1: click one scenario and assert "Activo" moves to it -- targeted
+    // via data-escenario (same disambiguation rationale as data-linea
+    // above: every scenario button shares "Aplicando…"/idle-label shape).
+    const escenarioId = "linea3-parar-alta"
+    const escenarioCard = page.locator(`[data-escenario="${escenarioId}"]`)
+    await escenarioCard.getByRole("button").click()
+    await escenarioCard.getByText("Aplicando…").waitFor({ state: "visible", timeout: 5_000 }).catch(() => {})
+    // 20s: this route is very likely this test run's first hit (see the
+    // "Simular turno" wait above for why).
+    await escenarioCard.getByText("Activo").waitFor({ state: "visible", timeout: 20_000 })
+    const otrosActivos = await page
+      .locator(`[data-escenario]:not([data-escenario="${escenarioId}"])`)
+      .getByText("Activo")
+      .count()
+    if (otrosActivos > 0) {
+      allViolations.push("\n== backoffice / escenarios ==")
+      allViolations.push(`  - more than one scenario marked "Activo" after applying ${escenarioId}`)
+    }
+    const escenarioAlerts = await visibleAlertTexts()
+    if (escenarioAlerts.length > 0) {
+      allViolations.push("\n== backoffice / escenarios ==")
+      allViolations.push(...escenarioAlerts.map((t) => `  - inline error shown after applying a scenario: ${t}`))
+    }
+    console.log("backoffice escenarios: OK")
+    await checkOverflow("after escenario")
 
     await page.getByRole("button", { name: "Salir" }).click()
     await page.getByLabel("Clave de facilitador").waitFor({ state: "visible" })
