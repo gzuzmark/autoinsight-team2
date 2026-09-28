@@ -53,7 +53,7 @@ export async function POST(request: Request): Promise<Response> {
 /** DELETE /api/backoffice/sesion: idempotent logout -- an unknown/missing
  * cookie is a silent no-op (the gate is stateless, so there is nothing else
  * to close server-side). */
-export async function DELETE(): Promise<Response> {
+export async function DELETE(_request: Request): Promise<Response> {
   return new Response(null, {
     status: 204,
     headers: { ...NO_STORE, "Set-Cookie": clearedBackofficeCookieHeader() },
