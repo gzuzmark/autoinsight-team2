@@ -7,37 +7,81 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ESTILOS } from "@/lib/status"
+import { ejecutarAccion } from "@/lib/backoffice/acciones"
+import type { EstadoDemo, LineaDemoConocida } from "@/lib/domain/floor-repository"
+import { formatearHora, type Severidad } from "@/lib/mock-data"
 import {
   COMUNICACIONES,
   ESCENARIOS,
-  ESTADO_DEMO,
   GUION_PASOS,
-  LINEAS_DEMO,
+  PARTICIPANTE_ACTUAL,
   PLANTA_NOMBRE,
   REGISTRO_SESION,
 } from "@/lib/backoffice/sample-data"
 
-// G1: static back-office layout (odd/tasks/assets/shot-backoffice.png). Every
-// action button below is present but inert ("Disponible en G2") except the
-// two-tap "Reiniciar demo" confirm toggle (client state only, no actual
-// reset yet) and "Salir" (a real logout call) -- the rest ship with their
-// own tasks (G2 reset/shift, G3 scenarios, G6/G7 comms).
+// G1: static back-office layout (odd/tasks/assets/shot-backoffice.png).
+// G2: "Estado de la demo" and "Cambiar turno" now read/act on live
+// FloorRepository data (see app/backoffice/page.tsx); every other action
+// button stays inert ("Disponible en G3"/"Disponible en G6/G7") until its
+// own task (G3 Escenarios, G6/G7 Comunicaciones, G4 Registro, G5 Guion y
+// notas / Participante).
 
-const INERT_TITLE = "Disponible en G2"
+const INERT_TITLE_ESCENARIOS = "Disponible en G3"
+const INERT_TITLE_COMUNICACIONES = "Disponible en G6/G7"
+const INERT_TITLE_REGISTRO = "Disponible en G4"
+const INERT_TITLE_NOTAS = "Disponible en G5"
 
-export function BackofficeDashboard() {
+export function BackofficeDashboard({ estadoDemo }: { estadoDemo: EstadoDemo }) {
   const router = useRouter()
   const [saliendo, setSaliendo] = useState(false)
   const [confirmandoReinicio, setConfirmandoReinicio] = useState(false)
+  const [reiniciando, setReiniciando] = useState(false)
+  const [mensajeReinicio, setMensajeReinicio] = useState<string | null>(null)
+  const [lineaEnCurso, setLineaEnCurso] = useState<LineaDemoConocida | null>(null)
+  const [mensajeTurno, setMensajeTurno] = useState<{ linea: LineaDemoConocida; texto: string } | null>(null)
 
   async function onSalir() {
     if (saliendo) return
     setSaliendo(true)
-    try {
-      await fetch("/api/backoffice/sesion", { method: "DELETE" })
-    } finally {
+    const resultado = await ejecutarAccion("/api/backoffice/sesion", { method: "DELETE" })
+    if (resultado.ok) {
       router.refresh()
+      return
     }
+    // B1: reset the busy state and surface the error inline instead of
+    // leaving "Salir" disabled forever.
+    setSaliendo(false)
+  }
+
+  async function onReiniciar() {
+    if (reiniciando) return
+    setReiniciando(true)
+    setMensajeReinicio(null)
+    const resultado = await ejecutarAccion("/api/backoffice/reiniciar", { method: "POST" })
+    setReiniciando(false)
+    if (resultado.ok) {
+      setConfirmandoReinicio(false)
+      router.refresh()
+      return
+    }
+    setMensajeReinicio(resultado.error)
+  }
+
+  async function onSimularTurno(linea: LineaDemoConocida) {
+    if (lineaEnCurso) return
+    setLineaEnCurso(linea)
+    setMensajeTurno(null)
+    const resultado = await ejecutarAccion("/api/backoffice/turno", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ linea }),
+    })
+    setLineaEnCurso(null)
+    if (resultado.ok) {
+      router.refresh()
+      return
+    }
+    setMensajeTurno({ linea, texto: resultado.error })
   }
 
   return (
@@ -59,8 +103,20 @@ export function BackofficeDashboard() {
       </header>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <EstadoDemoCard confirmando={confirmandoReinicio} onConfirmarChange={setConfirmandoReinicio} />
-        <CambiarTurnoCard />
+        <EstadoDemoCard
+          estadoDemo={estadoDemo}
+          confirmando={confirmandoReinicio}
+          onConfirmarChange={setConfirmandoReinicio}
+          reiniciando={reiniciando}
+          mensaje={mensajeReinicio}
+          onReiniciar={onReiniciar}
+        />
+        <CambiarTurnoCard
+          estadoDemo={estadoDemo}
+          lineaEnCurso={lineaEnCurso}
+          mensaje={mensajeTurno}
+          onSimularTurno={onSimularTurno}
+        />
         <EscenariosCard />
       </div>
 
@@ -74,7 +130,7 @@ export function BackofficeDashboard() {
   )
 }
 
-function EstadoLineaChip({ estado }: { estado: (typeof LINEAS_DEMO)[number]["estado"] }) {
+function EstadoLineaChip({ estado }: { estado: Severidad }) {
   const estilo = ESTILOS[estado]
   return (
     <span
@@ -86,12 +142,26 @@ function EstadoLineaChip({ estado }: { estado: (typeof LINEAS_DEMO)[number]["est
 }
 
 function EstadoDemoCard({
+  estadoDemo,
   confirmando,
   onConfirmarChange,
+  reiniciando,
+  mensaje,
+  onReiniciar,
 }: {
+  estadoDemo: EstadoDemo
   confirmando: boolean
   onConfirmarChange: (valor: boolean) => void
+  reiniciando: boolean
+  mensaje: string | null
+  onReiniciar: () => void
 }) {
+  const alertasAbiertas = estadoDemo.lineas.reduce((total, l) => total + l.alertasAbiertas, 0)
+  const ultimasSimulaciones = estadoDemo.lineas
+    .map((l) => l.ultimaSimulacion)
+    .filter((ts): ts is number => ts !== null)
+  const ultimoTurno = ultimasSimulaciones.length > 0 ? formatearHora(Math.max(...ultimasSimulaciones)) : "—"
+
   return (
     <Card>
       <CardHeader>
@@ -100,8 +170,8 @@ function EstadoDemoCard({
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <ul className="flex flex-col gap-2">
-          {LINEAS_DEMO.map((linea) => (
-            <li key={linea.id} className="flex items-center justify-between gap-2">
+          {estadoDemo.lineas.map((linea) => (
+            <li key={linea.nombre} className="flex items-center justify-between gap-2">
               <span className="text-sm font-medium">{linea.nombre}</span>
               <EstadoLineaChip estado={linea.estado} />
             </li>
@@ -111,11 +181,11 @@ function EstadoDemoCard({
         <div className="grid grid-cols-2 gap-3 border-t border-border pt-3">
           <div>
             <p className="text-xs text-neutral-500">Alertas abiertas</p>
-            <p className="text-lg font-bold">{ESTADO_DEMO.alertasAbiertas}</p>
+            <p className="text-lg font-bold">{alertasAbiertas}</p>
           </div>
           <div>
             <p className="text-xs text-neutral-500">Último turno</p>
-            <p className="text-lg font-bold">{ESTADO_DEMO.ultimoTurno}</p>
+            <p className="text-lg font-bold">{ultimoTurno}</p>
           </div>
         </div>
 
@@ -123,6 +193,7 @@ function EstadoDemoCard({
           <Button
             className="w-full bg-red-600 text-white hover:bg-red-700"
             onClick={() => onConfirmarChange(true)}
+            disabled={reiniciando}
           >
             Reiniciar demo
           </Button>
@@ -138,29 +209,35 @@ function EstadoDemoCard({
               <Button
                 size="sm"
                 className="flex-1 bg-red-600 text-white hover:bg-red-700"
-                disabled
-                title={INERT_TITLE}
+                onClick={onReiniciar}
+                disabled={reiniciando}
               >
-                Sí, reiniciar
+                {reiniciando ? "Reiniciando…" : "Sí, reiniciar"}
               </Button>
               <Button
                 variant="secondary"
                 size="sm"
                 className="flex-1"
                 onClick={() => onConfirmarChange(false)}
+                disabled={reiniciando}
               >
                 Cancelar
               </Button>
             </div>
+            {mensaje && (
+              <p role="alert" className="text-xs font-medium text-red-800">
+                {mensaje}
+              </p>
+            )}
           </div>
         )}
 
         <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
           <div>
             <p className="text-xs text-neutral-500">Participante actual</p>
-            <p className="text-sm font-bold">{ESTADO_DEMO.participanteActual}</p>
+            <p className="text-sm font-bold">{PARTICIPANTE_ACTUAL}</p>
           </div>
-          <Button variant="secondary" size="sm" disabled title={INERT_TITLE}>
+          <Button variant="secondary" size="sm" disabled title={INERT_TITLE_REGISTRO}>
             Nuevo participante
           </Button>
         </div>
@@ -170,7 +247,17 @@ function EstadoDemoCard({
   )
 }
 
-function CambiarTurnoCard() {
+function CambiarTurnoCard({
+  estadoDemo,
+  lineaEnCurso,
+  mensaje,
+  onSimularTurno,
+}: {
+  estadoDemo: EstadoDemo
+  lineaEnCurso: LineaDemoConocida | null
+  mensaje: { linea: LineaDemoConocida; texto: string } | null
+  onSimularTurno: (linea: LineaDemoConocida) => void
+}) {
   return (
     <Card>
       <CardHeader>
@@ -178,17 +265,28 @@ function CambiarTurnoCard() {
         <CardDescription>Simula el cambio de turno por línea</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {LINEAS_DEMO.map((linea) => (
-          <div key={linea.id} className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium">{linea.nombre}</p>
-              <p className="text-xs text-neutral-500">
-                Última simulación {linea.ultimaSimulacion ?? "—"}
-              </p>
+        {estadoDemo.lineas.map((linea) => (
+          <div key={linea.nombre} className="flex flex-col gap-1">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">{linea.nombre}</p>
+                <p className="text-xs text-neutral-500">
+                  Última simulación {linea.ultimaSimulacion !== null ? formatearHora(linea.ultimaSimulacion) : "—"}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => onSimularTurno(linea.nombre)}
+                disabled={lineaEnCurso !== null}
+              >
+                {lineaEnCurso === linea.nombre ? "Simulando…" : "Simular turno"}
+              </Button>
             </div>
-            <Button size="sm" disabled title={INERT_TITLE}>
-              Simular turno
-            </Button>
+            {mensaje?.linea === linea.nombre && (
+              <p role="alert" className="text-xs font-medium text-destructive">
+                {mensaje.texto}
+              </p>
+            )}
           </div>
         ))}
       </CardContent>
@@ -210,7 +308,7 @@ function EscenariosCard() {
             variant={escenario.activo ? "outline" : "secondary"}
             className={`w-full justify-between ${escenario.activo ? "border-indigo-600 text-indigo-700" : ""}`}
             disabled
-            title={INERT_TITLE}
+            title={INERT_TITLE_ESCENARIOS}
           >
             <span>{escenario.nombre}</span>
             {escenario.activo && (
@@ -236,7 +334,11 @@ function ComunicacionesCard() {
         {COMUNICACIONES.map((accion) => (
           <div key={accion.id} className="flex items-center justify-between gap-3">
             <div className="flex flex-col gap-1">
-              <Button disabled title={INERT_TITLE} className="bg-indigo-700 text-white hover:bg-indigo-800">
+              <Button
+                disabled
+                title={INERT_TITLE_COMUNICACIONES}
+                className="bg-indigo-700 text-white hover:bg-indigo-800"
+              >
                 {accion.etiqueta}
               </Button>
               <p className="text-xs text-neutral-500">{accion.detalle}</p>
@@ -257,7 +359,7 @@ function RegistroSesionCard() {
           <CardTitle>Registro de la sesión</CardTitle>
           <CardDescription>Eventos capturados durante la prueba</CardDescription>
         </div>
-        <Button variant="secondary" size="sm" disabled title={INERT_TITLE}>
+        <Button variant="secondary" size="sm" disabled title={INERT_TITLE_REGISTRO}>
           Descargar CSV
         </Button>
       </CardHeader>
@@ -305,9 +407,9 @@ function GuionNotasCard() {
             className="min-h-30 w-full rounded-md border border-border bg-background p-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             placeholder="Notas de la sesión…"
             disabled
-            title={INERT_TITLE}
+            title={INERT_TITLE_NOTAS}
           />
-          <Button className="self-end" disabled title={INERT_TITLE}>
+          <Button className="self-end" disabled title={INERT_TITLE_NOTAS}>
             Guardar nota
           </Button>
         </div>

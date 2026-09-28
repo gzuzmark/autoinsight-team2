@@ -1,32 +1,16 @@
-import type { Severidad } from "@/lib/mock-data"
-
 /**
- * Static sample data for the /backoffice facilitator dashboard (G1). Every
- * action shown against this data is inert in G1 -- the real behavior
- * (reset, shift trigger, scenarios, comms) ships in G2/G3/G6/G7. Line names
- * and layout match the OpenPencil design (odd/tasks/assets/shot-backoffice.png).
+ * Static sample data for the /backoffice facilitator dashboard. G2 wired
+ * "Estado de la demo" and "Cambiar turno" to live FloorRepository data
+ * (see app/backoffice/page.tsx / components/backoffice/backoffice-dashboard.tsx)
+ * -- everything below stays inert until its own task (G3 Escenarios, G6/G7
+ * Comunicaciones, G4 Registro, G5 Guion y notas / Participante).
  */
-
-export type LineaDemo = {
-  id: string
-  nombre: string
-  estado: Severidad
-  ultimaSimulacion: string | null
-}
 
 export const PLANTA_NOMBRE = "Planta Norte"
 
-export const LINEAS_DEMO: LineaDemo[] = [
-  { id: "linea-1", nombre: "Línea 1 · Chasis", estado: "ok", ultimaSimulacion: null },
-  { id: "linea-2", nombre: "Línea 2 · Pintura", estado: "atencion", ultimaSimulacion: "08:15" },
-  { id: "linea-3", nombre: "Línea 3 · Motores", estado: "parar", ultimaSimulacion: null },
-]
-
-export const ESTADO_DEMO = {
-  alertasAbiertas: 4,
-  ultimoTurno: "06:00",
-  participanteActual: "P3",
-}
+/** G2: "Participante actual" stays a placeholder until G4/G5 wire real
+ * session-log participant tracking; "Nuevo participante" stays inert. */
+export const PARTICIPANTE_ACTUAL = "P3"
 
 export type Escenario = { id: string; nombre: string; activo: boolean }
 
