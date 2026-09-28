@@ -33,6 +33,54 @@ const VIEWPORTS = [
 // local stack most environments running this script will not have up.
 const UI_CHECK_DB_CONTAINER = process.env.UI_CHECK_DB_CONTAINER
 
+// G2: best-effort demo reset before the floor scenarios run, so repeated
+// `test:ui` runs against the same long-lived dev server (mock mode's
+// InMemoryFloorRepository is a module-level singleton -- see
+// lib/floor-repository.ts) don't keep resolving alerts out of the same
+// fixed seeded pool across runs. Skipped silently when BACKOFFICE_KEY is
+// unset (same guard as runBackofficeScenario) or on any failure -- this is
+// a convenience, never a hard requirement for the floor scenarios below.
+//
+// Uses its own synthetic x-forwarded-for (D21's per-IP login throttle key)
+// instead of the real client IP: this call happens outside any browser
+// page (a plain fetch, no cookie jar to share with Playwright anyway), and
+// it must NOT compete for the floor/office/backoffice scenarios' shared
+// 10-attempts/60s login budget below (they already use most of it, all
+// from the same "unknown-client" fallback bucket a Playwright-driven
+// browser request produces with no x-forwarded-for header).
+const UI_CHECK_RESET_IP = "127.0.0.2"
+
+async function resetDemoIfPossible() {
+  const key = process.env.BACKOFFICE_KEY
+  if (!key) {
+    console.log("demo reset (pre-floor-tests): SKIPPED (BACKOFFICE_KEY not set)")
+    return
+  }
+  try {
+    const loginRes = await fetch(`${BASE_URL}/api/backoffice/sesion`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-forwarded-for": UI_CHECK_RESET_IP },
+      body: JSON.stringify({ clave: key }),
+    })
+    const cookie = loginRes.headers.get("set-cookie")?.split(";")[0]
+    if (loginRes.status !== 204 || !cookie) {
+      console.log(`demo reset (pre-floor-tests): SKIPPED (login failed with ${loginRes.status})`)
+      return
+    }
+    const resetRes = await fetch(`${BASE_URL}/api/backoffice/reiniciar`, {
+      method: "POST",
+      headers: { cookie, "x-forwarded-for": UI_CHECK_RESET_IP },
+    })
+    console.log(`demo reset (pre-floor-tests): ${resetRes.ok ? "OK" : `FAILED (${resetRes.status})`}`)
+    await fetch(`${BASE_URL}/api/backoffice/sesion`, {
+      method: "DELETE",
+      headers: { cookie, "x-forwarded-for": UI_CHECK_RESET_IP },
+    })
+  } catch (err) {
+    console.log(`demo reset (pre-floor-tests): SKIPPED (${err.message})`)
+  }
+}
+
 async function main() {
   let res
   try {
@@ -49,6 +97,8 @@ async function main() {
 
   // F5: the browser is always closed, even if a scenario throws (a stray
   // Chrome process left running is worse than a failed check).
+  await resetDemoIfPossible()
+
   const browser = await chromium.launch({ channel: "chrome" })
   const allViolations = []
   try {
@@ -669,6 +719,40 @@ async function runBackofficeScenario(browser, allViolations) {
       await page.getByText("Estado de la demo").waitFor({ state: "visible" })
       await checkOverflow(`dashboard / ${name}`)
     }
+
+    // G2: Reiniciar demo (two-tap confirm) and one Simular turno — assert
+    // each completes (busy state clears, the confirm box/button return to
+    // their idle label, no inline error, no console error).
+    await page.getByRole("button", { name: "Reiniciar demo" }).click()
+    await page.getByText("¿Reiniciar? Se pierde el estado actual").waitFor({ state: "visible" })
+    // Next.js always renders an empty, visually-hidden #__next-route-announcer__
+    // with role="alert" (accessibility route-change announcer) -- filter to
+    // non-empty text so it never counts as one of our own inline errors.
+    async function visibleAlertTexts() {
+      return (await page.getByRole("alert").allTextContents()).map((t) => t.trim()).filter((t) => t.length > 0)
+    }
+
+    await page.getByRole("button", { name: "Sí, reiniciar" }).click()
+    await page.getByText("¿Reiniciar? Se pierde el estado actual").waitFor({ state: "hidden", timeout: 10_000 })
+    const reinicioAlerts = await visibleAlertTexts()
+    if (reinicioAlerts.length > 0) {
+      allViolations.push("\n== backoffice / reiniciar demo ==")
+      allViolations.push(...reinicioAlerts.map((t) => `  - inline error shown after Reiniciar demo: ${t}`))
+    }
+    console.log("backoffice reiniciar demo: OK")
+
+    await page.getByRole("button", { name: "Simular turno" }).first().click()
+    await page
+      .getByRole("button", { name: "Simular turno" })
+      .first()
+      .waitFor({ state: "visible", timeout: 10_000 })
+    const turnoAlerts = await visibleAlertTexts()
+    if (turnoAlerts.length > 0) {
+      allViolations.push("\n== backoffice / simular turno ==")
+      allViolations.push(...turnoAlerts.map((t) => `  - inline error shown after Simular turno: ${t}`))
+    }
+    console.log("backoffice simular turno: OK")
+    await checkOverflow("after demo actions")
 
     await page.getByRole("button", { name: "Salir" }).click()
     await page.getByLabel("Clave de facilitador").waitFor({ state: "visible" })

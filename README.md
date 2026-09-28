@@ -32,10 +32,12 @@ Open [http://localhost:3100](http://localhost:3100) with your browser to see the
   (D5/D11/D12) -- see `app/oficina/**` and `components/oficina/**`.
 - `/oficina/alertas/[id]` -- alert investigation screen (static sample data).
 - `/oficina/reportes` -- report list and "Programar reporte" form.
-- `/backoffice` -- facilitator back office for guerrilla-testing sessions
-  (reset the demo, trigger a shift per line, scenarios, session log, script
-  and notes). Deliberately **not** linked from `/`, `/planta` or `/oficina`
-  -- reachable only by typing the URL, and gated server-side behind the
+- `/backoffice` -- facilitator back office for guerrilla-testing sessions:
+  reset the demo (`POST /api/backoffice/reiniciar`) and trigger a shift per
+  line (`POST /api/backoffice/turno`, body `{ "linea": ... }`) against live
+  data; scenarios, session log, script and notes stay inert until their own
+  tasks. Deliberately **not** linked from `/`, `/planta` or `/oficina` --
+  reachable only by typing the URL, and gated server-side behind the
   `BACKOFFICE_KEY` facilitator key (see "Environment variables" below and
   "Simulate a shift (demo)"). `lib/backoffice/no-link-guard.test.ts` fails
   CI if any other page ever links to it.
@@ -298,17 +300,36 @@ scripting or for `supabase/snippets/cron_demo.sql`):
 select * from demo_simular_turno_linea('Línea 3 · Motores');
 ```
 
-**From `/backoffice`** (facilitator key required, `BACKOFFICE_KEY`): the
-"Cambiar turno" card's "Simular turno" button per line calls the same
-`demo_simular_turno_linea` RPC as the two paths above (ships with G2 --
-`/backoffice` exists from G1 but that button is inert until then).
+**From `/backoffice`** (facilitator key required, `BACKOFFICE_KEY`) — the
+easiest path during a guerrilla-testing session, no Supabase dashboard
+needed: the "Cambiar turno" card's "Simular turno" button per line calls
+`POST /api/backoffice/turno` (body `{ "linea": "Línea 3 · Motores" }`,
+validated against the three known lines), which calls the same
+`demo_simular_turno_linea` RPC (Supabase mode) or an equivalent
+deterministic in-memory shift simulation (mock mode, `DATA_SOURCE=mock` --
+see `lib/domain/simular-turno.ts`) as the two paths above.
 
-All three paths run the exact same rules the old in-app button always did:
-if the line is saturated (every alert template already active), the oldest
-open template alerts are closed as "No aplica" by the system first to make
-room (K5); a generated alert linked to a KPI records that reading on the
-line's indicator (D25); and every other indicator on the line then moves
-one step toward OK (a "recovery reading", D26).
+All paths run the exact same rules the old in-app button always did: if the
+line is saturated (every alert template already active), the oldest open
+template alerts are closed as "No aplica" by the system first to make room
+(K5); a generated alert linked to a KPI records that reading on the line's
+indicator (D25); and every other indicator on the line then moves one step
+toward OK (a "recovery reading", D26).
+
+**Resetting the demo between participants:** `/backoffice`'s "Reiniciar
+demo" button (two-tap confirm) calls `POST /api/backoffice/reiniciar`,
+which restores alerts, KPI readings, sessions ("since last visit" state)
+and login lockouts to their seeded values -- users/PINs are never touched.
+In Supabase mode this calls `demo_reiniciar()`, which you can also run
+directly from the SQL editor:
+
+```sql
+select demo_reiniciar();
+```
+
+Both `/backoffice` routes require the same `backoffice_sesion` cookie the
+key-gate form sets; they respond 401 without it and 503 when
+`BACKOFFICE_KEY` is unset.
 
 ## How KPI tiles change
 
