@@ -2,6 +2,7 @@ import "server-only"
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 import type {
+  EscenarioId,
   EstadoDemo,
   FloorRepository,
   LineaDemoConocida,
@@ -11,6 +12,7 @@ import type {
 } from "@/lib/domain/floor-repository"
 import {
   AlertNotFoundError,
+  esEscenarioId,
   esLineaDemoConocida,
   InvalidInputError,
   SessionInvalidError,
@@ -78,9 +80,15 @@ export class SupabaseFloorRepository implements FloorRepository {
   }
 
   async estadoDemo(): Promise<EstadoDemo> {
-    const { data, error } = await this.client.rpc("demo_estado_lineas")
-    if (error) throw this.mapError(error)
-    const filas = (data ?? []) as EstadoLineaRow[]
+    const [lineasResult, activoResult] = await Promise.all([
+      this.client.rpc("demo_estado_lineas"),
+      this.client.rpc("demo_estado_activo"),
+    ])
+    if (lineasResult.error) throw this.mapError(lineasResult.error)
+    if (activoResult.error) throw this.mapError(activoResult.error)
+
+    const filas = (lineasResult.data ?? []) as EstadoLineaRow[]
+    const activo = activoResult.data as string | null
     return {
       lineas: filas
         .filter((f): f is EstadoLineaRow & { nombre: LineaDemoConocida } => esLineaDemoConocida(f.nombre))
@@ -90,6 +98,9 @@ export class SupabaseFloorRepository implements FloorRepository {
           alertasAbiertas: f.alertas_abiertas,
           ultimaSimulacion: f.ultima_simulacion ? new Date(f.ultima_simulacion).getTime() : null,
         })),
+      // G3: an active scenario reported by a row this adapter does not know
+      // (e.g. a stale/renamed id) degrades to null rather than throwing.
+      escenarioActivo: esEscenarioId(activo) ? activo : null,
     }
   }
 
@@ -103,6 +114,14 @@ export class SupabaseFloorRepository implements FloorRepository {
       throw new InvalidInputError(`Línea desconocida: ${linea}`)
     }
     const { error } = await this.client.rpc("demo_simular_turno_linea", { p_linea: linea, p_cantidad: 2 })
+    if (error) throw this.mapError(error)
+  }
+
+  async aplicarEscenario(id: EscenarioId): Promise<void> {
+    if (!esEscenarioId(id)) {
+      throw new InvalidInputError(`Escenario desconocido: ${id}`)
+    }
+    const { error } = await this.client.rpc("demo_aplicar_escenario", { p_escenario: id })
     if (error) throw this.mapError(error)
   }
 

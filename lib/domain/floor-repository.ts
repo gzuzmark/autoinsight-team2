@@ -1,4 +1,8 @@
 import type { Alerta, Severidad } from "@/lib/mock-data"
+import type { EscenarioId } from "@/lib/domain/escenarios"
+
+export type { EscenarioId } from "@/lib/domain/escenarios"
+export { ESCENARIO_IDS, ESCENARIOS, esEscenarioId } from "@/lib/domain/escenarios"
 
 /**
  * Port for the plant-floor dashboard (D19-D23): every screen the app shows
@@ -84,6 +88,10 @@ export type LineaEstadoDemo = {
 
 export type EstadoDemo = {
   lineas: LineaEstadoDemo[]
+  /** G3: id of the scenario last applied via `aplicarEscenario`, or null
+   * when none is active (never applied, or invalidated -- see
+   * `aplicarEscenario`'s doc). */
+  escenarioActivo: EscenarioId | null
 }
 
 /** No/expired/invalid session (maps from Postgres errcode 28000). */
@@ -147,4 +155,15 @@ export interface FloorRepository {
    * @throws InvalidInputError if `linea` is not in LINEAS_DEMO_CONOCIDAS.
    */
   simularTurno(linea: LineaDemoConocida): Promise<void>
+
+  /**
+   * G3: resets to the seeded state, then applies a predefined scenario's
+   * deterministic alerts/KPI readings, and records it as the active
+   * scenario (`EstadoDemo#escenarioActivo`). A later `reiniciarDemo()`
+   * clears the active scenario back to null (reset = "Estado inicial", no
+   * scenario); a later `simularTurno()` also clears it (a shift makes the
+   * scenario no longer exact).
+   * @throws InvalidInputError if `id` is not in ESCENARIO_IDS.
+   */
+  aplicarEscenario(id: EscenarioId): Promise<void>
 }

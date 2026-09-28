@@ -8,30 +8,33 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ESTILOS } from "@/lib/status"
 import { ejecutarAccion } from "@/lib/backoffice/acciones"
-import type { EstadoDemo, LineaDemoConocida } from "@/lib/domain/floor-repository"
+import type { EscenarioId, EstadoDemo, LineaDemoConocida } from "@/lib/domain/floor-repository"
+import { ESCENARIOS } from "@/lib/domain/floor-repository"
 import { formatearHora, type Severidad } from "@/lib/mock-data"
-import {
-  COMUNICACIONES,
-  ESCENARIOS,
-  GUION_PASOS,
-  PARTICIPANTE_ACTUAL,
-  PLANTA_NOMBRE,
-  REGISTRO_SESION,
-} from "@/lib/backoffice/sample-data"
+import { COMUNICACIONES, GUION_PASOS, PARTICIPANTE_ACTUAL, PLANTA_NOMBRE, REGISTRO_SESION } from "@/lib/backoffice/sample-data"
 
 // G1: static back-office layout (odd/tasks/assets/shot-backoffice.png).
-// G2: "Estado de la demo" and "Cambiar turno" now read/act on live
-// FloorRepository data (see app/backoffice/page.tsx); every other action
-// button stays inert ("Disponible en G3"/"Disponible en G6/G7") until its
-// own task (G3 Escenarios, G6/G7 Comunicaciones, G4 Registro, G5 Guion y
-// notas / Participante).
+// G2: "Estado de la demo" and "Cambiar turno" read/act on live
+// FloorRepository data (see app/backoffice/page.tsx).
+// G3: "Escenarios" does too.
+// Every other action button stays inert ("Disponible en G6/G7"/"Disponible
+// en G4"/"Disponible en G5") until its own task.
 
-const INERT_TITLE_ESCENARIOS = "Disponible en G3"
 const INERT_TITLE_COMUNICACIONES = "Disponible en G6/G7"
 const INERT_TITLE_REGISTRO = "Disponible en G4"
 const INERT_TITLE_NOTAS = "Disponible en G5"
 
-export function BackofficeDashboard({ estadoDemo }: { estadoDemo: EstadoDemo }) {
+export function BackofficeDashboard({
+  estadoDemo,
+  error,
+}: {
+  estadoDemo: EstadoDemo
+  /** C4 (RDD review G2): non-null when estadoDemo() failed server-side --
+   * `estadoDemo` is then a usable placeholder, not real data (see
+   * lib/backoffice/estado-demo-fallback.ts). Shown as an inline banner;
+   * every action button below stays usable regardless. */
+  error?: string | null
+}) {
   const router = useRouter()
   const [saliendo, setSaliendo] = useState(false)
   const [confirmandoReinicio, setConfirmandoReinicio] = useState(false)
@@ -39,6 +42,8 @@ export function BackofficeDashboard({ estadoDemo }: { estadoDemo: EstadoDemo }) 
   const [mensajeReinicio, setMensajeReinicio] = useState<string | null>(null)
   const [lineaEnCurso, setLineaEnCurso] = useState<LineaDemoConocida | null>(null)
   const [mensajeTurno, setMensajeTurno] = useState<{ linea: LineaDemoConocida; texto: string } | null>(null)
+  const [escenarioEnCurso, setEscenarioEnCurso] = useState<EscenarioId | null>(null)
+  const [mensajeEscenario, setMensajeEscenario] = useState<{ id: EscenarioId; texto: string } | null>(null)
 
   async function onSalir() {
     if (saliendo) return
@@ -84,6 +89,23 @@ export function BackofficeDashboard({ estadoDemo }: { estadoDemo: EstadoDemo }) 
     setMensajeTurno({ linea, texto: resultado.error })
   }
 
+  async function onAplicarEscenario(id: EscenarioId) {
+    if (escenarioEnCurso) return
+    setEscenarioEnCurso(id)
+    setMensajeEscenario(null)
+    const resultado = await ejecutarAccion("/api/backoffice/escenario", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ escenario: id }),
+    })
+    setEscenarioEnCurso(null)
+    if (resultado.ok) {
+      router.refresh()
+      return
+    }
+    setMensajeEscenario({ id, texto: resultado.error })
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-350 flex-col gap-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -105,6 +127,7 @@ export function BackofficeDashboard({ estadoDemo }: { estadoDemo: EstadoDemo }) 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <EstadoDemoCard
           estadoDemo={estadoDemo}
+          error={error ?? null}
           confirmando={confirmandoReinicio}
           onConfirmarChange={setConfirmandoReinicio}
           reiniciando={reiniciando}
@@ -117,7 +140,12 @@ export function BackofficeDashboard({ estadoDemo }: { estadoDemo: EstadoDemo }) 
           mensaje={mensajeTurno}
           onSimularTurno={onSimularTurno}
         />
-        <EscenariosCard />
+        <EscenariosCard
+          escenarioActivo={estadoDemo.escenarioActivo}
+          escenarioEnCurso={escenarioEnCurso}
+          mensaje={mensajeEscenario}
+          onAplicarEscenario={onAplicarEscenario}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -143,6 +171,7 @@ function EstadoLineaChip({ estado }: { estado: Severidad }) {
 
 function EstadoDemoCard({
   estadoDemo,
+  error,
   confirmando,
   onConfirmarChange,
   reiniciando,
@@ -150,6 +179,7 @@ function EstadoDemoCard({
   onReiniciar,
 }: {
   estadoDemo: EstadoDemo
+  error: string | null
   confirmando: boolean
   onConfirmarChange: (valor: boolean) => void
   reiniciando: boolean
@@ -169,6 +199,14 @@ function EstadoDemoCard({
         <CardDescription>{PLANTA_NOMBRE}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
+        {/* C4 (RDD review G2): estadoDemo() failed server-side -- estadoDemo
+            above is a placeholder, not real state. Reiniciar demo/Cambiar
+            turno/Escenarios stay usable regardless (see the prop doc). */}
+        {error && (
+          <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-2 text-xs font-medium text-red-800">
+            {error}
+          </p>
+        )}
         <ul className="flex flex-col gap-2">
           {estadoDemo.lineas.map((linea) => (
             <li key={linea.nombre} className="flex items-center justify-between gap-2">
@@ -266,7 +304,13 @@ function CambiarTurnoCard({
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {estadoDemo.lineas.map((linea) => (
-          <div key={linea.nombre} className="flex flex-col gap-1">
+          // C1 (RDD review G2): data-linea disambiguates each line's
+          // "Simular turno" button for scripts/ui-check.mjs -- every line's
+          // button shares the same accessible name ("Simular turno"), so a
+          // name-only locator can match ANY of the 3 (including one that
+          // was never clicked and is already idle) instead of the specific
+          // one the test clicked.
+          <div key={linea.nombre} data-linea={linea.nombre} className="flex flex-col gap-1">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-medium">{linea.nombre}</p>
@@ -294,7 +338,17 @@ function CambiarTurnoCard({
   )
 }
 
-function EscenariosCard() {
+function EscenariosCard({
+  escenarioActivo,
+  escenarioEnCurso,
+  mensaje,
+  onAplicarEscenario,
+}: {
+  escenarioActivo: EscenarioId | null
+  escenarioEnCurso: EscenarioId | null
+  mensaje: { id: EscenarioId; texto: string } | null
+  onAplicarEscenario: (id: EscenarioId) => void
+}) {
   return (
     <Card>
       <CardHeader>
@@ -302,22 +356,34 @@ function EscenariosCard() {
         <CardDescription>Aplica un estado predefinido</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
-        {ESCENARIOS.map((escenario) => (
-          <Button
-            key={escenario.id}
-            variant={escenario.activo ? "outline" : "secondary"}
-            className={`w-full justify-between ${escenario.activo ? "border-indigo-600 text-indigo-700" : ""}`}
-            disabled
-            title={INERT_TITLE_ESCENARIOS}
-          >
-            <span>{escenario.nombre}</span>
-            {escenario.activo && (
-              <Badge variant="outline" className="border-indigo-600 text-indigo-700">
-                Activo
-              </Badge>
-            )}
-          </Button>
-        ))}
+        {ESCENARIOS.map((escenario) => {
+          const activo = escenarioActivo === escenario.id
+          return (
+            // C1: data-escenario disambiguates each scenario's button for
+            // scripts/ui-check.mjs, same rationale as CambiarTurnoCard's
+            // data-linea above.
+            <div key={escenario.id} data-escenario={escenario.id} className="flex flex-col gap-1">
+              <Button
+                variant={activo ? "outline" : "secondary"}
+                className={`w-full justify-between ${activo ? "border-indigo-600 text-indigo-700" : ""}`}
+                onClick={() => onAplicarEscenario(escenario.id)}
+                disabled={escenarioEnCurso !== null}
+              >
+                <span>{escenarioEnCurso === escenario.id ? "Aplicando…" : escenario.nombre}</span>
+                {activo && (
+                  <Badge variant="outline" className="border-indigo-600 text-indigo-700">
+                    Activo
+                  </Badge>
+                )}
+              </Button>
+              {mensaje?.id === escenario.id && (
+                <p role="alert" className="text-xs font-medium text-destructive">
+                  {mensaje.texto}
+                </p>
+              )}
+            </div>
+          )
+        })}
       </CardContent>
     </Card>
   )

@@ -12,14 +12,9 @@ export const PLANTA_NOMBRE = "Planta Norte"
  * session-log participant tracking; "Nuevo participante" stays inert. */
 export const PARTICIPANTE_ACTUAL = "P3"
 
-export type Escenario = { id: string; nombre: string; activo: boolean }
-
-export const ESCENARIOS: Escenario[] = [
-  { id: "todo-ok", nombre: "Todo OK", activo: true },
-  { id: "linea-3-parar-alta", nombre: "Línea 3 en PARAR con 1 ALTA", activo: false },
-  { id: "muchas-alertas-media", nombre: "Muchas alertas MEDIA", activo: false },
-  { id: "recuperacion-turno", nombre: "Recuperación tras turno", activo: false },
-]
+// G3: the real scenario catalog (ids + labels) now lives in
+// lib/domain/escenarios.ts, shared with the Supabase migration/route --
+// "Escenarios" wires to it directly in backoffice-dashboard.tsx.
 
 export type ComunicacionAccion = { id: string; etiqueta: string; detalle: string }
 

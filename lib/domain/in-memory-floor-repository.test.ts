@@ -189,6 +189,11 @@ describe("InMemoryFloorRepository", () => {
       expect(otra.alertasAbiertas).toBe(0)
       expect(otra.estado).toBe("ok")
     })
+
+    it("G3: escenarioActivo is null until a scenario is applied", async () => {
+      const estado = await repo.estadoDemo()
+      expect(estado.escenarioActivo).toBeNull()
+    })
   })
 
   describe("reiniciarDemo (G2)", () => {
@@ -270,6 +275,68 @@ describe("InMemoryFloorRepository", () => {
 
       const after = await repo.tablero(sessionId!)
       expect(after.alertas.length).toBeGreaterThan(before.alertas.length)
+    })
+
+    it("G3: clears an active scenario (a shift makes it no longer exact)", async () => {
+      await repo.aplicarEscenario("todo-ok")
+      await repo.simularTurno(LINEA_ACTIVA)
+      const estado = await repo.estadoDemo()
+      expect(estado.escenarioActivo).toBeNull()
+    })
+  })
+
+  describe("aplicarEscenario (G3)", () => {
+    it("throws InvalidInputError for an unknown scenario id", async () => {
+      // @ts-expect-error deliberately invalid at runtime
+      await expect(repo.aplicarEscenario("no-existe")).rejects.toBeInstanceOf(InvalidInputError)
+    })
+
+    it("'todo-ok': no open alerts anywhere, every KPI ok, records the active scenario", async () => {
+      await repo.aplicarEscenario("todo-ok")
+      const estado = await repo.estadoDemo()
+      expect(estado.escenarioActivo).toBe("todo-ok")
+      for (const linea of estado.lineas) {
+        expect(linea.alertasAbiertas).toBe(0)
+        expect(linea.estado).toBe("ok")
+      }
+    })
+
+    it("'linea3-parar-alta': exactly one open ALTA (parar) alert on Línea 3, other lines ok", async () => {
+      await repo.aplicarEscenario("linea3-parar-alta")
+      const estado = await repo.estadoDemo()
+      expect(estado.escenarioActivo).toBe("linea3-parar-alta")
+      const l3 = estado.lineas.find((l) => l.nombre === LINEA_ACTIVA)!
+      expect(l3.alertasAbiertas).toBe(1)
+      expect(l3.estado).toBe("parar")
+      for (const otra of estado.lineas.filter((l) => l.nombre !== LINEA_ACTIVA)) {
+        expect(otra.alertasAbiertas).toBe(0)
+        expect(otra.estado).toBe("ok")
+      }
+    })
+
+    it("'muchas-media': Línea 3 has more than 3 open MEDIA (atencion) alerts and no ALTA", async () => {
+      await repo.aplicarEscenario("muchas-media")
+      const estado = await repo.estadoDemo()
+      expect(estado.escenarioActivo).toBe("muchas-media")
+      const l3 = estado.lineas.find((l) => l.nombre === LINEA_ACTIVA)!
+      expect(l3.alertasAbiertas).toBeGreaterThan(3)
+      expect(l3.estado).toBe("atencion")
+    })
+
+    it("'recuperacion': Línea 3's alerts are already resolved, KPIs recovered", async () => {
+      await repo.aplicarEscenario("recuperacion")
+      const estado = await repo.estadoDemo()
+      expect(estado.escenarioActivo).toBe("recuperacion")
+      const l3 = estado.lineas.find((l) => l.nombre === LINEA_ACTIVA)!
+      expect(l3.alertasAbiertas).toBe(0)
+      expect(l3.estado).toBe("ok")
+    })
+
+    it("resets to seed before applying (a prior mutation does not leak into the scenario)", async () => {
+      await repo.simularTurno(LINEA_ACTIVA)
+      await repo.aplicarEscenario("todo-ok")
+      const estado = await repo.estadoDemo()
+      expect(estado.lineas.find((l) => l.nombre === LINEA_ACTIVA)!.alertasAbiertas).toBe(0)
     })
   })
 })
