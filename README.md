@@ -331,6 +331,33 @@ Both `/backoffice` routes require the same `backoffice_sesion` cookie the
 key-gate form sets; they respond 401 without it and 503 when
 `BACKOFFICE_KEY` is unset.
 
+**Predefined scenarios (G3):** the "Escenarios" card applies one of four
+deterministic presets in one call -- `POST /api/backoffice/escenario` (body
+`{ "escenario": "<id>" }`), or `select demo_aplicar_escenario('<id>');` from
+the SQL editor. Each one resets to seed first, then applies its own fixed
+alerts/KPI readings (never a random draw, so a scenario always looks the
+same):
+
+| id | What it shows |
+| --- | --- |
+| `todo-ok` | No open alerts on any line; every KPI in its OK band. |
+| `linea3-parar-alta` | Exactly one open ALTA (parar) alert on Línea 3, its linked KPI held in PARAR (D25/D30); other lines OK. |
+| `muchas-media` | Línea 3 has more than 3 open MEDIA (atencion) alerts, none ALTA -- enough to show the "+N alertas menos graves" overflow (D8); its linked KPI held in ATENCIÓN; other lines OK. |
+| `recuperacion` | Línea 3's alerts are already resolved (Atendida/No aplica) and its KPIs are back to OK. |
+
+The active scenario is tracked server-side (`demo_estado_activo()`) and
+shown as an "Activo" tag on its card in `/backoffice` -- a plain "Reiniciar
+demo" clears it back to none ("Estado inicial"), and any "Simular turno"
+shift also clears it (the scenario is no longer exact once real simulation
+data lands on top of it).
+
+Note on "recuperación tras turno": the scenario controls alerts/KPIs only --
+it cannot force a specific user's "Desde tu última visita" strip to show
+anything, since that is derived per-session from each participant's own
+login/logout history (`ultima_visita`), which the back office does not
+control. If you want that strip populated for a demo, have the participant
+log out and back in after the scenario runs.
+
 ## How KPI tiles change
 
 A KPI tile's state word (OK / ATENCIÓN / PARAR) is never stored on its own
