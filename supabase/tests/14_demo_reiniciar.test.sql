@@ -1,7 +1,15 @@
 -- G2: demo_reiniciar() restores the floor to its seeded state; demo_estado_lineas()
 -- reports live per-line status for the back office.
 begin;
-select plan(19);
+select plan(17);
+
+-- C3 (RDD review G2, 2026-09-28): snapshot every line's current KPI values
+-- BEFORE mutating anything -- at this point (right after `supabase db reset
+-- --local` loaded seed.sql, and before this test file touches anything) the
+-- database IS the seeded state, so this snapshot is the seed's own values,
+-- not a second copy of literals that could silently drift from seed.sql.
+create temporary table _seed_indicadores as
+  select linea_id, clave, valor from public.indicadores;
 
 -- Isolate from any other test file's leftovers (same pattern as
 -- 05_demo.test.sql): start from a clean slate of alerts, sessions and login
@@ -21,14 +29,15 @@ select id as linea3_id from public.lineas where nombre = 'Línea 3 · Motores' \
 -- did via seed.sql -- explicit here since this test file cleared them).
 select private.sembrar_alertas_linea3(:'l3_linea3_id');
 
--- Mutate: attend one alert, drop a KPI reading away from its seed value,
--- open + close a session (so "since last visit" state exists), and rack up
--- login attempts.
+-- Mutate: attend one alert, open + close a session (so "since last visit"
+-- state exists), and rack up login attempts.
 update public.alertas set estado = 'atendida', resuelta_en = now(), resuelta_por = :'ana_usuario_id'
 where linea_id = :'l3_linea3_id' and titulo = 'Calibración completada';
 
-update public.indicadores set valor = 12.3, actualizado_en = now()
-where linea_id = :'l3_linea3_id' and clave = 'fpy';
+-- C3: mutate EVERY line's KPI readings away from seed (not just Línea 3's
+-- fpy), so the parity assertion below actually exercises all 3 lines x 3
+-- claves, not just the one row the old test happened to touch.
+update public.indicadores set valor = valor + 37, actualizado_en = now();
 
 select public.iniciar_sesion(:'ana_usuario_id', '1234') as sesion_id \gset s_
 select public.cerrar_sesion(:'s_sesion_id');
@@ -56,20 +65,19 @@ select is(
   7,
   'every restored alert is "nueva" (the earlier "atendida" mutation is gone)'
 );
+-- C3: parity across ALL lines' KPI readings (9 rows: 3 lines x 3 claves),
+-- compared against the same-transaction snapshot captured before this file
+-- mutated anything -- no literal duplicated from seed.sql, and every line
+-- is covered, not just Línea 3.
 select is(
-  (select valor from public.indicadores where linea_id = :'l3_linea3_id' and clave = 'fpy'),
-  88.4::numeric,
-  'reset restores the seeded FPY reading (parity with supabase/seed.sql)'
-);
-select is(
-  (select valor from public.indicadores where linea_id = :'l3_linea3_id' and clave = 'dph'),
-  5::numeric,
-  'reset restores the seeded Defectos/hora reading'
-);
-select is(
-  (select valor from public.indicadores where linea_id = :'l3_linea3_id' and clave = 'scrap'),
-  1.6::numeric,
-  'reset restores the seeded Scrap reading'
+  (
+    select count(*)::int
+    from public.indicadores i
+    join _seed_indicadores s using (linea_id, clave)
+    where i.valor is distinct from s.valor
+  ),
+  0,
+  'reset restores every line''s KPI readings to their seeded values (parity with supabase/seed.sql)'
 );
 select is(
   (select count(*)::int from public.sesiones),
