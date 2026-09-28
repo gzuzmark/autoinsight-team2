@@ -2,7 +2,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
 import { ESTILOS } from "./status"
-import { isOfficePath, scanForViolations } from "./design-rules"
+import { isBackofficePath, isOfficePath, scanForViolations } from "./design-rules"
 
 // Guards D4-D13 (see odd/tasks/autoinsight-port.md) so a future change that
 // violates a floor design rule fails fast in CI, instead of only being
@@ -143,6 +143,40 @@ describe("O-D3: office paths are exempt from floor-only rules but not the standa
 
   it("still forbids an arbitrary pixel text size in an office file (standard-scale rule not exempted)", () => {
     const hits = scanForViolations("components/oficina/chart.tsx", `<span className="text-[13px]" />`)
+    expect(hits.length).toBeGreaterThan(0)
+  })
+})
+
+describe("D28 amendment: back office paths get the same exemption model as office (O-D3)", () => {
+  it("recognizes app/backoffice/** and components/backoffice/** as backoffice paths", () => {
+    expect(isBackofficePath("app/backoffice/page.tsx")).toBe(true)
+    expect(isBackofficePath("components/backoffice/dashboard.tsx")).toBe(true)
+    expect(isBackofficePath(path.join("app", "backoffice", "page.tsx"))).toBe(true)
+  })
+
+  it("does not treat plant-floor, office, or other paths as backoffice paths", () => {
+    expect(isBackofficePath("app/planta/page.tsx")).toBe(false)
+    expect(isBackofficePath("app/oficina/page.tsx")).toBe(false)
+    expect(isBackofficePath("app/page.tsx")).toBe(false)
+  })
+
+  it("rejects lookalike prefixes that only share the leading letters, not a real backoffice path", () => {
+    expect(isBackofficePath("app/backoffice-legacy/x.tsx")).toBe(false)
+    expect(isBackofficePath("components/backoffice-foo.tsx")).toBe(false)
+  })
+
+  it("allows sub-24px named text size in a backoffice file (floor-only rule exempted)", () => {
+    const hits = scanForViolations("app/backoffice/page.tsx", `<p className="text-sm">Hola</p>`)
+    expect(hits).toEqual([])
+  })
+
+  it("allows muted/gray text in a backoffice file (floor-only rule exempted)", () => {
+    const hits = scanForViolations("components/backoffice/dashboard.tsx", `<span className="text-neutral-500">2.3%</span>`)
+    expect(hits).toEqual([])
+  })
+
+  it("still forbids an arbitrary pixel height in a backoffice file (standard-scale rule not exempted)", () => {
+    const hits = scanForViolations("app/backoffice/page.tsx", `<div className="h-[88px]" />`)
     expect(hits.length).toBeGreaterThan(0)
   })
 })

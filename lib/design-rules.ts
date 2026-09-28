@@ -57,8 +57,22 @@ export function isOfficePath(file: string): boolean {
   )
 }
 
+/** D28 amendment: /backoffice is a facilitator tool used at a desk (phone or
+ * laptop), same exemption model as the office desk view (O-D3) -- the
+ * floor-only rules (D11/D12) do not apply, but the standard Tailwind scale
+ * still does. */
+export function isBackofficePath(file: string): boolean {
+  const normalized = file.split(path.sep).join("/")
+  return (
+    normalized === "app/backoffice" ||
+    normalized.startsWith("app/backoffice/") ||
+    normalized === "components/backoffice" ||
+    normalized.startsWith("components/backoffice/")
+  )
+}
+
 export function rulesForFile(file: string): Rule[] {
-  return isOfficePath(file) ? STANDARD_SCALE_RULES : ALL_RULES
+  return isOfficePath(file) || isBackofficePath(file) ? STANDARD_SCALE_RULES : ALL_RULES
 }
 
 /** Scans one file's content against the rules applicable to its path,
