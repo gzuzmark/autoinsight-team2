@@ -17,7 +17,15 @@ export function readBackofficeToken(request: Request): string | null {
   for (const part of header.split(";")) {
     const [rawName, ...rawValue] = part.trim().split("=")
     if (rawName === BACKOFFICE_COOKIE_NAME) {
-      return decodeURIComponent(rawValue.join("="))
+      // B4 (RDD review 2026-09-28): a malformed percent-encoding (e.g. a
+      // lone "%" from a corrupted/tampered cookie) makes decodeURIComponent
+      // throw URIError -- treat that the same as "no cookie" instead of
+      // letting it crash the route handler with a 500.
+      try {
+        return decodeURIComponent(rawValue.join("="))
+      } catch {
+        return null
+      }
     }
   }
   return null

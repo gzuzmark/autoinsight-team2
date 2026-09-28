@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { currentToken, deriveToken, isBackofficeConfigured, isValidToken, verifyKey } from "./key-gate"
+import {
+  currentToken,
+  decidirGate,
+  deriveToken,
+  isBackofficeConfigured,
+  isValidToken,
+  verifyKey,
+} from "./key-gate"
 
 // G1: the facilitator key gate must fail closed whenever BACKOFFICE_KEY is
 // unset, and must never leak the raw key into the derived session token.
@@ -104,5 +111,24 @@ describe("isValidToken", () => {
     })()
     vi.stubEnv("BACKOFFICE_KEY", "")
     expect(isValidToken(token)).toBe(false)
+  })
+})
+
+// B3 (RDD review 2026-09-28): the server-side gate decision on
+// app/backoffice/page.tsx had no unit/route test -- only ui-check, skipped
+// without a key. Extracted here as a pure function so it is directly
+// testable without a Server Component / cookies() dependency.
+describe("decidirGate", () => {
+  it("is 'disabled' when BACKOFFICE_KEY is unset, regardless of token validity", () => {
+    expect(decidirGate(false, true)).toBe("disabled")
+    expect(decidirGate(false, false)).toBe("disabled")
+  })
+
+  it("is 'dashboard' when configured and the token is valid", () => {
+    expect(decidirGate(true, true)).toBe("dashboard")
+  })
+
+  it("is 'form' when configured but the token is invalid/missing", () => {
+    expect(decidirGate(true, false)).toBe("form")
   })
 })

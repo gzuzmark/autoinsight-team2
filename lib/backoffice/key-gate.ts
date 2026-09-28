@@ -47,6 +47,17 @@ export function isValidToken(token: string | null): boolean {
   return constantTimeEquals(token, expected)
 }
 
+/** B3 (RDD review 2026-09-28): the server-side "which view renders"
+ * decision, extracted as a pure function so it has a direct unit test
+ * instead of relying only on ui-check (which skips without a configured
+ * key). Used by app/backoffice/page.tsx. */
+export type GateDecision = "dashboard" | "form" | "disabled"
+
+export function decidirGate(configured: boolean, tokenValido: boolean): GateDecision {
+  if (!configured) return "disabled"
+  return tokenValido ? "dashboard" : "form"
+}
+
 function constantTimeEquals(a: string, b: string): boolean {
   const bufA = Buffer.from(a)
   const bufB = Buffer.from(b)

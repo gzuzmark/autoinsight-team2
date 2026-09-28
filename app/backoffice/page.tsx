@@ -1,6 +1,6 @@
 import { cookies } from "next/headers"
 import { BACKOFFICE_COOKIE_NAME } from "@/lib/api/backoffice-cookie"
-import { isBackofficeConfigured, isValidToken } from "@/lib/backoffice/key-gate"
+import { decidirGate, isBackofficeConfigured, isValidToken } from "@/lib/backoffice/key-gate"
 import { BackofficeDashboard } from "@/components/backoffice/backoffice-dashboard"
 import { KeyGateForm } from "@/components/backoffice/key-gate-form"
 
@@ -8,16 +8,23 @@ import { KeyGateForm } from "@/components/backoffice/key-gate-form"
 // '/oficina' (D28 amendment, lib/backoffice/no-link-guard.test.ts). Server
 // Component so the facilitator-key gate is decided server-side, before any
 // dashboard content reaches the client: without a valid session cookie,
-// only the key form ever renders.
+// only the key form ever renders. The actual "which view" decision is the
+// pure, unit-tested `decidirGate` (B3, RDD review 2026-09-28,
+// lib/backoffice/key-gate.test.ts) -- this component only gathers its
+// inputs and renders the result.
 export default async function BackofficePage() {
   const configured = isBackofficeConfigured()
   const jar = await cookies()
   const token = jar.get(BACKOFFICE_COOKIE_NAME)?.value ?? null
-  const authenticated = configured && isValidToken(token)
+  const decision = decidirGate(configured, isValidToken(token))
 
   return (
     <main className="min-h-dvh w-full bg-neutral-50 px-4 py-6 text-neutral-900 md:px-8">
-      {authenticated ? <BackofficeDashboard /> : <KeyGateForm configured={configured} />}
+      {decision === "dashboard" ? (
+        <BackofficeDashboard />
+      ) : (
+        <KeyGateForm configured={decision !== "disabled"} />
+      )}
     </main>
   )
 }
