@@ -444,7 +444,12 @@ export type Database = {
     }
     Functions: {
       cerrar_sesion: { Args: { p_sesion_id: string }; Returns: undefined }
+      demo_aplicar_escenario: {
+        Args: { p_escenario: string }
+        Returns: undefined
+      }
       demo_autoresolver: { Args: { p_antiguedad?: string }; Returns: number }
+      demo_estado_activo: { Args: never; Returns: string }
       demo_estado_lineas: { Args: never; Returns: Json }
       demo_generar_alertas: {
         Args: { p_cantidad?: number; p_linea_id?: string }
