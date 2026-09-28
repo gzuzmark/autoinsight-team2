@@ -1,14 +1,23 @@
 import { randomUUID } from "node:crypto"
 import { activeAlerts, attendAlert, dismissAlert } from "@/lib/domain/alerts"
 import { indicadorATablero } from "@/lib/domain/indicadores"
+import { simularTurnoLinea } from "@/lib/domain/simular-turno"
 import type {
+  EstadoDemo,
   FloorRepository,
   IndicadorTablero,
+  LineaDemoConocida,
   Resolucion,
   Tablero,
   UsuarioLogin,
 } from "@/lib/domain/floor-repository"
-import { AlertNotFoundError, InvalidInputError, SessionInvalidError } from "@/lib/domain/floor-repository"
+import {
+  AlertNotFoundError,
+  esLineaDemoConocida,
+  InvalidInputError,
+  LINEAS_DEMO_CONOCIDAS,
+  SessionInvalidError,
+} from "@/lib/domain/floor-repository"
 import {
   ALERTAS_INICIALES,
   INDICADORES,
@@ -19,7 +28,31 @@ import {
   type Indicador,
 } from "@/lib/mock-data"
 
-const LINEA = { nombre: "Línea 3 · Motores", turno: "Turno mañana" }
+const LINEA = { nombre: "Línea 3 · Motores" as LineaDemoConocida, turno: "Turno mañana" }
+
+/** Per-line demo state (G2): every `LineaDemoConocida` gets one entry so the
+ * back office can act on any of them even though only `LINEA` (Línea 3) is
+ * ever attached to a floor session in mock mode (mock users are not tied to
+ * a line -- see the D19 note in floor-repository.ts). The other two lines
+ * start empty (no seeded alerts, same baseline KPIs), matching
+ * supabase/seed.sql, which also only seeds starting alerts for Línea 3. */
+type LineaEstado = {
+  alertas: Alerta[]
+  indicadoresState: Indicador[]
+  ultimaSimulacion: number | null
+}
+
+function estadoInicialLinea(nombre: LineaDemoConocida): LineaEstado {
+  return {
+    alertas: nombre === LINEA.nombre ? ordenarAlertas(ALERTAS_INICIALES.map((a) => ({ ...a }))) : [],
+    indicadoresState: INDICADORES.map((i) => ({ ...i })),
+    ultimaSimulacion: null,
+  }
+}
+
+function estadoInicialLineas(): Map<LineaDemoConocida, LineaEstado> {
+  return new Map(LINEAS_DEMO_CONOCIDAS.map((nombre) => [nombre, estadoInicialLinea(nombre)]))
+}
 
 type Sesion = {
   usuarioId: string
@@ -42,12 +75,11 @@ type Sesion = {
  * throttle documented in the README.
  */
 export class InMemoryFloorRepository implements FloorRepository {
-  private alertas: Alerta[] = ordenarAlertas(ALERTAS_INICIALES)
-  /** D24/D26 mock parity: readings are mutable state, mirroring
-   * `indicadores` in the Supabase adapter. Cloned from the module-level
-   * fixture so each repository instance (each test, each dev server
-   * restart) starts from the same baseline instead of sharing mutations. */
-  private indicadoresState: Indicador[] = INDICADORES.map((i) => ({ ...i }))
+  /** G2: one entry per LINEAS_DEMO_CONOCIDAS. `LINEA` (Línea 3) is the only
+   * one a floor session ever reads from `tablero()`; the others exist so
+   * the back office's "Estado de la demo" and "Simular turno" have
+   * somewhere to write. */
+  private lineasEstado: Map<LineaDemoConocida, LineaEstado> = estadoInicialLineas()
   private ultimaActualizacion = Date.now()
   private readonly sesiones = new Map<string, Sesion>()
   /** Epoch ms of each user's most recent closed session (their "last
@@ -80,7 +112,8 @@ export class InMemoryFloorRepository implements FloorRepository {
   async tablero(sessionId: string): Promise<Tablero> {
     const sesion = this.requireSesion(sessionId)
     const usuario = USUARIOS.find((u) => u.id === sesion.usuarioId)!
-    const activas = activeAlerts(this.alertas)
+    const lineaActiva = this.lineaActiva()
+    const activas = activeAlerts(lineaActiva.alertas)
 
     return {
       planta: { nombre: PLANTA_NOMBRE },
@@ -101,13 +134,61 @@ export class InMemoryFloorRepository implements FloorRepository {
     if (resolucion !== "atendida" && resolucion !== "no_aplica") {
       throw new InvalidInputError("Resolución inválida.")
     }
-    if (!this.alertas.some((a) => a.id === alertaId)) {
+    const lineaActiva = this.lineaActiva()
+    if (!lineaActiva.alertas.some((a) => a.id === alertaId)) {
       throw new AlertNotFoundError("Alerta no encontrada.")
     }
 
-    this.alertas =
-      resolucion === "atendida" ? attendAlert(this.alertas, alertaId) : dismissAlert(this.alertas, alertaId)
+    lineaActiva.alertas =
+      resolucion === "atendida"
+        ? attendAlert(lineaActiva.alertas, alertaId)
+        : dismissAlert(lineaActiva.alertas, alertaId)
     this.ultimaActualizacion = Date.now()
+  }
+
+  async estadoDemo(): Promise<EstadoDemo> {
+    return {
+      lineas: LINEAS_DEMO_CONOCIDAS.map((nombre) => {
+        const estado = this.lineasEstado.get(nombre)!
+        const activas = activeAlerts(estado.alertas)
+        return {
+          nombre,
+          estado: activas[0]?.severidad ?? "ok",
+          alertasAbiertas: activas.length,
+          ultimaSimulacion: estado.ultimaSimulacion,
+        }
+      }),
+    }
+  }
+
+  async reiniciarDemo(): Promise<void> {
+    this.lineasEstado = estadoInicialLineas()
+    this.sesiones.clear()
+    this.ultimaVisitaPorUsuario.clear()
+    this.ultimaActualizacion = Date.now()
+    // Mock mode has no per-user PIN lockout to reset -- lib/api/login-throttle.ts
+    // is a per-IP request rate limit (route-level, not demo/PIN state) and is
+    // deliberately left alone here, same as the Supabase adapter leaves
+    // sesiones/usuarios/usuarios_pin alone.
+  }
+
+  async simularTurno(linea: LineaDemoConocida): Promise<void> {
+    if (!esLineaDemoConocida(linea) || !this.lineasEstado.has(linea)) {
+      throw new InvalidInputError(`Línea desconocida: ${linea}`)
+    }
+    const estado = this.lineasEstado.get(linea)!
+    const ahora = Date.now()
+    const resultado = simularTurnoLinea(estado.alertas, estado.indicadoresState, 2, ahora)
+    this.lineasEstado.set(linea, {
+      alertas: resultado.alertas,
+      indicadoresState: resultado.indicadoresState,
+      ultimaSimulacion: ahora,
+    })
+    if (linea === LINEA.nombre) this.ultimaActualizacion = ahora
+  }
+
+  private lineaActiva(): LineaEstado {
+    return this.lineasEstado.get(LINEA.nombre)!
   }
 
   private requireSesion(sessionId: string): Sesion {
@@ -117,7 +198,7 @@ export class InMemoryFloorRepository implements FloorRepository {
   }
 
   private indicadores(): IndicadorTablero[] {
-    return this.indicadoresState.map(indicadorATablero)
+    return this.lineaActiva().indicadoresState.map(indicadorATablero)
   }
 
   /** Currently-active alerts created after `ultimaVisita` (mirrors the
@@ -132,6 +213,6 @@ export class InMemoryFloorRepository implements FloorRepository {
    * unlike `nuevasIdsDesde` which is active-only. 0 on first visit. */
   private cambiosDesdeVisita(ultimaVisita: number | null): number {
     if (ultimaVisita === null) return 0
-    return this.alertas.filter((a) => a.timestamp > ultimaVisita).length
+    return this.lineaActiva().alertas.filter((a) => a.timestamp > ultimaVisita).length
   }
 }

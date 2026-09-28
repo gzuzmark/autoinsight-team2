@@ -445,6 +445,7 @@ export type Database = {
     Functions: {
       cerrar_sesion: { Args: { p_sesion_id: string }; Returns: undefined }
       demo_autoresolver: { Args: { p_antiguedad?: string }; Returns: number }
+      demo_estado_lineas: { Args: never; Returns: Json }
       demo_generar_alertas: {
         Args: { p_cantidad?: number; p_linea_id?: string }
         Returns: {
@@ -468,6 +469,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      demo_reiniciar: { Args: never; Returns: undefined }
       demo_simular_turno: {
         Args: { p_cantidad?: number; p_sesion_id: string }
         Returns: {

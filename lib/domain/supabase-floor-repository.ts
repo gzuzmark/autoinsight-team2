@@ -2,12 +2,19 @@ import "server-only"
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 import type {
+  EstadoDemo,
   FloorRepository,
+  LineaDemoConocida,
   Resolucion,
   Tablero,
   UsuarioLogin,
 } from "@/lib/domain/floor-repository"
-import { AlertNotFoundError, InvalidInputError, SessionInvalidError } from "@/lib/domain/floor-repository"
+import {
+  AlertNotFoundError,
+  esLineaDemoConocida,
+  InvalidInputError,
+  SessionInvalidError,
+} from "@/lib/domain/floor-repository"
 import type { Database } from "@/lib/supabase/database.types"
 import type { Alerta, Severidad } from "@/lib/mock-data"
 
@@ -70,6 +77,35 @@ export class SupabaseFloorRepository implements FloorRepository {
     if (error) throw this.mapError(error)
   }
 
+  async estadoDemo(): Promise<EstadoDemo> {
+    const { data, error } = await this.client.rpc("demo_estado_lineas")
+    if (error) throw this.mapError(error)
+    const filas = (data ?? []) as EstadoLineaRow[]
+    return {
+      lineas: filas
+        .filter((f): f is EstadoLineaRow & { nombre: LineaDemoConocida } => esLineaDemoConocida(f.nombre))
+        .map((f) => ({
+          nombre: f.nombre,
+          estado: f.estado,
+          alertasAbiertas: f.alertas_abiertas,
+          ultimaSimulacion: f.ultima_simulacion ? new Date(f.ultima_simulacion).getTime() : null,
+        })),
+    }
+  }
+
+  async reiniciarDemo(): Promise<void> {
+    const { error } = await this.client.rpc("demo_reiniciar")
+    if (error) throw this.mapError(error)
+  }
+
+  async simularTurno(linea: LineaDemoConocida): Promise<void> {
+    if (!esLineaDemoConocida(linea)) {
+      throw new InvalidInputError(`Línea desconocida: ${linea}`)
+    }
+    const { error } = await this.client.rpc("demo_simular_turno_linea", { p_linea: linea, p_cantidad: 2 })
+    if (error) throw this.mapError(error)
+  }
+
   private mapTablero(row: TableroRow): Tablero {
     return {
       planta: { nombre: row.planta.nombre },
@@ -113,6 +149,16 @@ export class SupabaseFloorRepository implements FloorRepository {
         return new Error(error.message)
     }
   }
+}
+
+/** Shape of one element of the jsonb array `public.demo_estado_lineas()`
+ * returns (see the migration for the exact `row_to_json` shape this
+ * mirrors). */
+type EstadoLineaRow = {
+  nombre: string
+  estado: Severidad
+  alertas_abiertas: number
+  ultima_simulacion: string | null
 }
 
 /** Shape of the jsonb `public.tablero(uuid)` RPC result (see the migration

@@ -56,6 +56,36 @@ export type Tablero = {
 
 export type Resolucion = "atendida" | "no_aplica"
 
+/** G2: the fixed set of lines the facilitator back office can act on.
+ * Matches supabase/seed.sql's `lineas.nombre` values exactly (both adapters
+ * must agree on the same names -- the Supabase adapter resolves them by
+ * exact-name lookup, mirroring `demo_simular_turno_linea`'s own contract). */
+export const LINEAS_DEMO_CONOCIDAS = [
+  "Línea 1 · Chasis",
+  "Línea 2 · Pintura",
+  "Línea 3 · Motores",
+] as const
+
+export type LineaDemoConocida = (typeof LINEAS_DEMO_CONOCIDAS)[number]
+
+export function esLineaDemoConocida(valor: unknown): valor is LineaDemoConocida {
+  return typeof valor === "string" && (LINEAS_DEMO_CONOCIDAS as readonly string[]).includes(valor)
+}
+
+/** G2 back-office "Estado de la demo" card: one row per known line. */
+export type LineaEstadoDemo = {
+  nombre: LineaDemoConocida
+  /** Worst active-alert severity on the line, or "ok" when it has none. */
+  estado: Severidad
+  alertasAbiertas: number
+  /** Epoch ms of the line's last "Simular turno", or null if never. */
+  ultimaSimulacion: number | null
+}
+
+export type EstadoDemo = {
+  lineas: LineaEstadoDemo[]
+}
+
 /** No/expired/invalid session (maps from Postgres errcode 28000). */
 export class SessionInvalidError extends Error {
   constructor(message = "Invalid session.") {
@@ -99,4 +129,22 @@ export interface FloorRepository {
    * @throws InvalidInputError
    */
   resolverAlerta(sessionId: string, alertaId: string, resolucion: Resolucion): Promise<void>
+
+  /** G2: facilitator back-office "Estado de la demo" card -- live per-line
+   * state, independent of any session. Never requires a floor session. */
+  estadoDemo(): Promise<EstadoDemo>
+  /** G2: restores the floor to its seeded initial state (alerts, KPI
+   * readings, per-line last-shift bookkeeping, "since last visit" state).
+   * Users/PINs are never touched. Idempotent-in-effect: calling it again
+   * from the just-reset state reproduces the same state. */
+  reiniciarDemo(): Promise<void>
+  /**
+   * G2: simulates a shift change on one line (same rules as
+   * `demo_simular_turno_linea`/the removed "Simular turno" button): frees
+   * room on a saturated line, generates new alerts, records a KPI reading
+   * for a linked template, then recovers every other indicator one step
+   * toward ok.
+   * @throws InvalidInputError if `linea` is not in LINEAS_DEMO_CONOCIDAS.
+   */
+  simularTurno(linea: LineaDemoConocida): Promise<void>
 }

@@ -89,43 +89,12 @@ values
 -- Initial active alerts on Línea 3, matching lib/mock-data.ts
 -- ALERTAS_INICIALES (id/severidad/titulo/estación/relative age), with
 -- plausible valor/limite/unidad added for the alert detail screen.
-insert into public.alertas (linea_id, estacion_id, severidad, titulo, valor, limite, unidad, creada_en) values
-  (
-    '00000000-0000-0000-0000-000000000013',
-    (select id from public.estaciones where linea_id = '00000000-0000-0000-0000-000000000013' and numero = 4),
-    'parar', 'FPY por debajo del 90 %', 88.4, 90, '%', now() - interval '2 minutes'
-  ),
-  (
-    '00000000-0000-0000-0000-000000000013',
-    (select id from public.estaciones where linea_id = '00000000-0000-0000-0000-000000000013' and numero = 7),
-    'parar', 'Torque fuera de rango', 12.5, 10, 'Nm', now() - interval '6 minutes'
-  ),
-  (
-    '00000000-0000-0000-0000-000000000013',
-    (select id from public.estaciones where linea_id = '00000000-0000-0000-0000-000000000013' and numero = 2),
-    'atencion', 'Defectos por hora en aumento', 5, 4, 'defectos/h', now() - interval '11 minutes'
-  ),
-  (
-    '00000000-0000-0000-0000-000000000013',
-    (select id from public.estaciones where linea_id = '00000000-0000-0000-0000-000000000013' and numero = 5),
-    'atencion', 'Temperatura de horno alta', 185, 180, '°C', now() - interval '18 minutes'
-  ),
-  (
-    '00000000-0000-0000-0000-000000000013',
-    (select id from public.estaciones where linea_id = '00000000-0000-0000-0000-000000000013' and numero = 3),
-    'atencion', 'Retrabajo sobre lo esperado', 7.2, 5, '%', now() - interval '24 minutes'
-  ),
-  (
-    '00000000-0000-0000-0000-000000000013',
-    (select id from public.estaciones where linea_id = '00000000-0000-0000-0000-000000000013' and numero = 1),
-    'ok', 'Calibración completada', null, null, null, now() - interval '40 minutes'
-  ),
-  -- "Línea completa" in the mock (no single station): estacion_id null.
-  (
-    '00000000-0000-0000-0000-000000000013',
-    null,
-    'ok', 'Turno anterior sin scrap', null, null, null, now() - interval '55 minutes'
-  );
+--
+-- G2: this insert lives in `private.sembrar_alertas_linea3` (migration
+-- 20260928000021_demo_reiniciar_y_estado.sql) instead of a literal insert
+-- here, so `demo_reiniciar()` reproduces exactly this same data with no risk
+-- of drifting from it.
+select private.sembrar_alertas_linea3('00000000-0000-0000-0000-000000000013');
 
 -- Simulator catalog (>= 8 templates), covering the stations above. Weights
 -- (peso) are relative, used by demo_generar_alertas' weighted pick.
