@@ -7,15 +7,21 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { MetricChart } from "@/components/oficina/metric-chart"
 import { AlertHistory } from "@/components/oficina/alert-history"
 import { EightDPanel } from "@/components/oficina/eight-d-panel"
-import { getAlertaPorId, VARIANTE_POR_GRAVEDAD } from "@/lib/oficina/mock-data"
+import { getAlertaPorId, VARIANTE_POR_GRAVEDAD, type AlertaOficina } from "@/lib/oficina/mock-data"
+import { alertaDetalleAOficina } from "@/lib/oficina/alerta-real"
+import { getFloorRepository } from "@/lib/floor-repository"
 
-// Screen 02 (Investigación de alerta, O3): one static sample alert; an
-// unknown id renders the not-found boundary (O-D4, static demo only).
+// Screen 02 (Investigación de alerta, O3). G7b: a real alert id (from the
+// floor repository -- Supabase in prod, InMemory in mock mode) is preferred
+// first; the static samples (lib/oficina/mock-data.ts, still linked from
+// the Resumen table) keep working for their own sample ids. An id that
+// matches neither renders the not-found boundary.
+//
 // Next 16 passes route params as a Promise (breaking change vs. earlier
 // versions) -- see node_modules/next/dist/docs/01-app/01-getting-started/03-layouts-and-pages.md.
 export default async function AlertaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const alerta = getAlertaPorId(id)
+  const alerta = await resolverAlerta(id)
   if (!alerta) notFound()
 
   return (
@@ -70,12 +76,19 @@ export default async function AlertaPage({ params }: { params: Promise<{ id: str
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle>{alerta.metrica.titulo} · últimas 8 horas</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                {alerta.metrica.titulo} · últimas 8 horas
+                {alerta.esReal && <Badge variant="outline">Ejemplo</Badge>}
+              </CardTitle>
               <CardDescription>
-                Cada barra es una medición · rojo ={" "}
-                {alerta.metrica.direccion === "arriba"
-                  ? `sobre el límite de ${alerta.metrica.limite} ${alerta.metrica.unidad}`
-                  : `bajo el objetivo de ${alerta.metrica.limite} ${alerta.metrica.unidad}`}
+                {alerta.esReal
+                  ? "Sin serie histórica para esta alerta todavía -- gráfico de ejemplo."
+                  : <>
+                      Cada barra es una medición · rojo ={" "}
+                      {alerta.metrica.direccion === "arriba"
+                        ? `sobre el límite de ${alerta.metrica.limite} ${alerta.metrica.unidad}`
+                        : `bajo el objetivo de ${alerta.metrica.limite} ${alerta.metrica.unidad}`}
+                    </>}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -85,7 +98,10 @@ export default async function AlertaPage({ params }: { params: Promise<{ id: str
 
           <Card>
             <CardHeader>
-              <CardTitle>Análisis de causa raíz (8D)</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                Análisis de causa raíz (8D)
+                {alerta.esReal && <Badge variant="outline">Ejemplo</Badge>}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <EightDPanel pasos={alerta.ocho_d} progreso={alerta.ocho_d_progreso} />
@@ -113,4 +129,20 @@ function Hecho({ etiqueta, valor }: { etiqueta: string; valor: string }) {
       <span className="text-sm font-semibold">{valor}</span>
     </div>
   )
+}
+
+/** G7b: real data first (any known alert id, any line -- office has no
+ * session/line context), then the static samples (their own fixed ids),
+ * then null (the page calls notFound()). A repository failure degrades to
+ * the sample fallback path rather than throwing -- the office screen must
+ * not 500 just because the real lookup errored; log-and-fall-back mirrors
+ * the D5/C4 pattern used elsewhere in this codebase. */
+async function resolverAlerta(id: string): Promise<AlertaOficina | null> {
+  try {
+    const detalle = await getFloorRepository().obtenerAlerta(id)
+    if (detalle) return alertaDetalleAOficina(detalle)
+  } catch (err) {
+    console.error("[oficina] obtenerAlerta failed:", err)
+  }
+  return getAlertaPorId(id) ?? null
 }

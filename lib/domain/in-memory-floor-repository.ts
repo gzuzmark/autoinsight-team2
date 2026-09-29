@@ -5,6 +5,7 @@ import { simularTurnoLinea } from "@/lib/domain/simular-turno"
 import type { EscenarioId } from "@/lib/domain/escenarios"
 import { esEscenarioId } from "@/lib/domain/escenarios"
 import type {
+  AlertaDetalle,
   AlertasPorSeveridad,
   EstadoDemo,
   FloorRepository,
@@ -379,6 +380,31 @@ export class InMemoryFloorRepository implements FloorRepository {
     this.lineasEstado = nuevoEstado
     this.escenarioActivo = id
     this.ultimaActualizacion = ahora
+  }
+
+  async obtenerAlerta(id: string): Promise<AlertaDetalle | null> {
+    for (const nombre of LINEAS_DEMO_CONOCIDAS) {
+      const estado = this.lineasEstado.get(nombre)!
+      const alerta = estado.alertas.find((a) => a.id === id)
+      if (alerta) {
+        return {
+          id: alerta.id,
+          severidad: alerta.severidad,
+          titulo: alerta.titulo,
+          linea: nombre,
+          estacion: alerta.estacion,
+          estado: alerta.estado,
+          // Mock mode's Alerta shape carries no numeric reading/resolution
+          // timestamp -- see AlertaDetalle's doc.
+          valor: null,
+          limite: null,
+          unidad: null,
+          creadaEn: alerta.timestamp,
+          resueltaEn: null,
+        }
+      }
+    }
+    return null
   }
 
   private lineaActiva(): LineaEstado {

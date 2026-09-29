@@ -1,4 +1,4 @@
-import type { Alerta, Severidad } from "@/lib/mock-data"
+import type { Alerta, EstadoAlerta, Severidad } from "@/lib/mock-data"
 import type { EscenarioId } from "@/lib/domain/escenarios"
 
 export type { EscenarioId } from "@/lib/domain/escenarios"
@@ -163,6 +163,30 @@ export type ReporteTurnoDatos = {
   datosDisponibles: boolean
 }
 
+/** G7b: real-data shape for the office alert-investigation screen
+ * (`/oficina/alertas/[id]`). Unlike `Alerta` (floor-tablet shape, D5: no
+ * numeric value), the office view is read at a desk and shows real
+ * numbers (O-D4) -- `valor`/`limite`/`unidad` mirror the Supabase
+ * `alertas` table's own columns directly (no separate indicator lookup
+ * needed: the alert already carries the reading that triggered it).
+ * `valor`/`limite`/`unidad` and `resueltaEn` are always null in mock mode
+ * (`InMemoryFloorRepository`'s `Alerta` shape does not carry them) -- the
+ * office screen must show this honestly (label the KPI-chart/8D sections
+ * "Ejemplo" instead), never fabricate a number. */
+export type AlertaDetalle = {
+  id: string
+  severidad: Severidad
+  titulo: string
+  linea: string
+  estacion: string | null
+  estado: EstadoAlerta
+  valor: number | null
+  limite: number | null
+  unidad: string | null
+  creadaEn: number
+  resueltaEn: number | null
+}
+
 /** No/expired/invalid session (maps from Postgres errcode 28000). */
 export class SessionInvalidError extends Error {
   constructor(message = "Invalid session.") {
@@ -244,4 +268,11 @@ export interface FloorRepository {
    * @throws InvalidInputError if `id` is not in ESCENARIO_IDS.
    */
   aplicarEscenario(id: EscenarioId): Promise<void>
+
+  /** G7b: real alert data for the office investigation screen. Searches
+   * every known line (no session/line context on `/oficina`). Returns null
+   * for an unknown id -- callers that also serve the office's static
+   * sample alerts (`lib/oficina/mock-data.ts`) fall back to those before
+   * calling `notFound()`, never on a repository throw. */
+  obtenerAlerta(id: string): Promise<AlertaDetalle | null>
 }

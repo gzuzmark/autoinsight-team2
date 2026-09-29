@@ -73,6 +73,27 @@ describe.skipIf(!canRun)("SupabaseFloorRepository (integration, local stack)", (
     )
   })
 
+  // G7b: office investigation screen real-data lookup.
+  it("obtenerAlerta returns null for a non-uuid id (office sample-alert id shape) and for an unknown uuid", async () => {
+    expect(await repo.obtenerAlerta("torque-fuera-de-rango-l3-e7")).toBeNull()
+    expect(await repo.obtenerAlerta("00000000-0000-0000-0000-000000000000")).toBeNull()
+  })
+
+  it("obtenerAlerta finds a real seeded alert with linea/estacion/valor/limite from the alertas row", async () => {
+    const sessionId = await repo.iniciarSesion(ANA_ID, ANA_PIN)
+    const tablero = await repo.tablero(sessionId!)
+    const alertaId = tablero.alertas[0].id
+
+    const detalle = await repo.obtenerAlerta(alertaId)
+    expect(detalle).not.toBeNull()
+    expect(detalle!.id).toBe(alertaId)
+    expect(detalle!.linea).toBe("Línea 3 · Motores")
+    expect(detalle!.estado).toBe("nueva")
+    expect(detalle!.resueltaEn).toBeNull()
+
+    await repo.cerrarSesion(sessionId!)
+  })
+
   // Regression for the safeupdate hotfix: `authenticator` (the role
   // PostgREST always connects as) preloads pg-safeupdate, which rejects any
   // UPDATE/DELETE without a WHERE clause -- including inside a SECURITY

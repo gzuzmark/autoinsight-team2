@@ -148,6 +148,13 @@ export type AlertaOficina = {
   historial: EventoHistorial[]
   ocho_d: { paso: string; completado: boolean }[]
   ocho_d_progreso: string
+  /** G7b: true for an alert built from real floor-repository data
+   * (lib/oficina/alerta-real.ts) -- undefined/false for these static
+   * samples. Drives the "Ejemplo" labels on sections a real alert has no
+   * backing data for (chart series, 8D panel, history beyond
+   * created/resolved) instead of silently passing off sample content as
+   * real. */
+  esReal?: boolean
 }
 
 export const ALERTAS: AlertaOficina[] = [

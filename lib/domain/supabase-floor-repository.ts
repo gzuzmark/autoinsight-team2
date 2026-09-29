@@ -2,6 +2,7 @@ import "server-only"
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 import type {
+  AlertaDetalle,
   EscenarioId,
   EstadoDemo,
   FloorRepository,
@@ -12,6 +13,8 @@ import type {
   Tablero,
   UsuarioLogin,
 } from "@/lib/domain/floor-repository"
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 import {
   AlertNotFoundError,
   esEscenarioId,
@@ -20,7 +23,7 @@ import {
   SessionInvalidError,
 } from "@/lib/domain/floor-repository"
 import type { Database } from "@/lib/supabase/database.types"
-import type { Alerta, Severidad } from "@/lib/mock-data"
+import type { Alerta, EstadoAlerta, Severidad } from "@/lib/mock-data"
 
 /**
  * Real-backend adapter (D19/D20): calls the SECURITY DEFINER RPCs in
@@ -201,6 +204,41 @@ export class SupabaseFloorRepository implements FloorRepository {
     if (error) throw this.mapError(error)
   }
 
+  async obtenerAlerta(id: string): Promise<AlertaDetalle | null> {
+    // G7b: office sample alert ids (lib/oficina/mock-data.ts, e.g.
+    // "torque-fuera-de-rango-l3-e7") are never valid uuids -- querying
+    // Postgres with one throws (invalid input syntax for type uuid) instead
+    // of returning no rows. Short-circuit so the caller's sample-id
+    // fallback works the same in both adapters.
+    if (!UUID_RE.test(id)) return null
+
+    // Direct table read (not an RPC): the service-role client already
+    // bypasses RLS, and this is a plain by-id lookup with no state
+    // mutation, so no SECURITY DEFINER function is needed for it.
+    const { data, error } = await this.client
+      .from("alertas")
+      .select("id,severidad,titulo,estado,valor,limite,unidad,creada_en,resuelta_en,lineas(nombre),estaciones(nombre)")
+      .eq("id", id)
+      .maybeSingle()
+    if (error) throw this.mapError(error)
+    if (!data) return null
+    const row = data as unknown as AlertaDetalleRow
+
+    return {
+      id: row.id,
+      severidad: row.severidad,
+      titulo: row.titulo,
+      linea: row.lineas?.nombre ?? "",
+      estacion: row.estaciones?.nombre ?? null,
+      estado: row.estado,
+      valor: row.valor,
+      limite: row.limite,
+      unidad: row.unidad,
+      creadaEn: new Date(row.creada_en).getTime(),
+      resueltaEn: row.resuelta_en ? new Date(row.resuelta_en).getTime() : null,
+    }
+  }
+
   private mapTablero(row: TableroRow): Tablero {
     return {
       planta: { nombre: row.planta.nombre },
@@ -244,6 +282,23 @@ export class SupabaseFloorRepository implements FloorRepository {
         return new Error(error.message)
     }
   }
+}
+
+/** Shape of a `public.alertas` row joined to its `lineas`/`estaciones` name
+ * (see `obtenerAlerta`'s select -- PostgREST embeds the related row under
+ * the table name, singular relation). */
+type AlertaDetalleRow = {
+  id: string
+  severidad: Severidad
+  titulo: string
+  estado: EstadoAlerta
+  valor: number | null
+  limite: number | null
+  unidad: string | null
+  creada_en: string
+  resuelta_en: string | null
+  lineas: { nombre: string } | null
+  estaciones: { nombre: string } | null
 }
 
 /** Shape of one element of the jsonb array `public.demo_estado_lineas()`

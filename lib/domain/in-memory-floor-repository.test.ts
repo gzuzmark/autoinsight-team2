@@ -443,4 +443,39 @@ describe("InMemoryFloorRepository", () => {
       expect(estado.lineas.find((l) => l.nombre === LINEA_ACTIVA)!.alertasAbiertas).toBe(0)
     })
   })
+
+  describe("obtenerAlerta (G7b)", () => {
+    it("returns null for an unknown id", async () => {
+      expect(await repo.obtenerAlerta("does-not-exist")).toBeNull()
+    })
+
+    it("finds a seeded Línea 3 alert by id, with linea/estacion/estado, but no numeric value or resolution time", async () => {
+      const estado = await repo.estadoDemo()
+      const l3 = estado.lineas.find((l) => l.nombre === LINEA_ACTIVA)!
+      expect(l3.alertasAbiertas).toBeGreaterThan(0)
+      const tablero = await repo.tablero(await repo.iniciarSesion(ANA.id, ANA.pin) as string)
+      const alertaId = tablero.alertas[0].id
+
+      const detalle = await repo.obtenerAlerta(alertaId)
+      expect(detalle).not.toBeNull()
+      expect(detalle!.id).toBe(alertaId)
+      expect(detalle!.linea).toBe(LINEA_ACTIVA)
+      expect(detalle!.estado).toBe("nueva")
+      expect(detalle!.valor).toBeNull()
+      expect(detalle!.limite).toBeNull()
+      expect(detalle!.unidad).toBeNull()
+      expect(detalle!.resueltaEn).toBeNull()
+    })
+
+    it("finds an alert generated on another known line by simularTurno", async () => {
+      const reporte = await repo.simularTurno("Línea 1 · Chasis")
+      expect(reporte.nuevasAlertas.length).toBeGreaterThan(0)
+      const generada = reporte.nuevasAlertas[0]
+
+      const detalle = await repo.obtenerAlerta(generada.id)
+      expect(detalle).not.toBeNull()
+      expect(detalle!.linea).toBe("Línea 1 · Chasis")
+      expect(detalle!.titulo).toBe(generada.titulo)
+    })
+  })
 })
