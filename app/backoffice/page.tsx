@@ -38,7 +38,13 @@ export default async function BackofficePage() {
   if (decision === "dashboard") {
     try {
       resultado = { ok: true, data: await getFloorRepository().estadoDemo() }
-    } catch {
+    } catch (err) {
+      // D4 (final-demo plan Batch I): log the underlying failure
+      // server-side (no secrets -- `err` here is a repository-mapped
+      // Error, never a raw Supabase/PostgREST payload with credentials) so
+      // an outage or a missing/un-applied migration is diagnosable instead
+      // of only ever showing the generic banner below.
+      console.error("[backoffice] estadoDemo() failed:", err)
       resultado = { ok: false, error: "No se pudo obtener el estado de la demo." }
     }
   }
