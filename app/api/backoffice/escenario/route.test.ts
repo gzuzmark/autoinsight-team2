@@ -58,6 +58,19 @@ describe("POST /api/backoffice/escenario", () => {
     expect(res.status).toBe(400)
   })
 
+  it("D5: returns a JSON 500 error body (no-store) instead of an unhandled throw when the repository fails", async () => {
+    vi.stubEnv("BACKOFFICE_KEY", "dev-facilitador")
+    const token = currentToken()!
+    vi.spyOn(repo, "aplicarEscenario").mockRejectedValue(new Error("boom"))
+
+    const res = await POST(req({ escenario: "todo-ok" }, token))
+    const body = await res.json()
+
+    expect(res.status).toBe(500)
+    expect(res.headers.get("cache-control")).toBe("no-store")
+    expect(typeof body.error).toBe("string")
+  })
+
   it("applies the given scenario and returns 200 with a valid cookie/escenario", async () => {
     vi.stubEnv("BACKOFFICE_KEY", "dev-facilitador")
     const token = currentToken()!

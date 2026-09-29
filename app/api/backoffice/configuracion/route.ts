@@ -2,6 +2,7 @@ import "server-only"
 
 import { readBackofficeToken } from "@/lib/api/backoffice-cookie"
 import { isBackofficeConfigured, isValidToken } from "@/lib/backoffice/key-gate"
+import { respuestaErrorInterno } from "@/lib/backoffice/route-error"
 import { getFloorRepository } from "@/lib/floor-repository"
 
 const NO_STORE = { "Cache-Control": "no-store" }
@@ -27,7 +28,12 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json(INVALID_BODY, { status: 400, headers: NO_STORE })
   }
 
-  await getFloorRepository().setEnviarReporteTurno(valor)
+  try {
+    await getFloorRepository().setEnviarReporteTurno(valor)
+  } catch (err) {
+    // D5: never an unhandled throw -- see lib/backoffice/route-error.ts.
+    return respuestaErrorInterno("setEnviarReporteTurno", err)
+  }
 
   return Response.json({ ok: true }, { headers: NO_STORE })
 }

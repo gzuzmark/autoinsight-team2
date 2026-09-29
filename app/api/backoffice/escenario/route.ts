@@ -2,6 +2,7 @@ import "server-only"
 
 import { readBackofficeToken } from "@/lib/api/backoffice-cookie"
 import { isBackofficeConfigured, isValidToken } from "@/lib/backoffice/key-gate"
+import { respuestaErrorInterno } from "@/lib/backoffice/route-error"
 import { esEscenarioId, InvalidInputError, type EscenarioId } from "@/lib/domain/floor-repository"
 import { getFloorRepository } from "@/lib/floor-repository"
 
@@ -35,7 +36,8 @@ export async function POST(request: Request): Promise<Response> {
     if (err instanceof InvalidInputError) {
       return Response.json(INVALID_ESCENARIO, { status: 400, headers: NO_STORE })
     }
-    throw err
+    // D5: never an unhandled throw -- see lib/backoffice/route-error.ts.
+    return respuestaErrorInterno("aplicarEscenario", err)
   }
 
   return Response.json({ ok: true }, { headers: NO_STORE })

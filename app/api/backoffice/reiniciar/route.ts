@@ -2,6 +2,7 @@ import "server-only"
 
 import { readBackofficeToken } from "@/lib/api/backoffice-cookie"
 import { isBackofficeConfigured, isValidToken } from "@/lib/backoffice/key-gate"
+import { respuestaErrorInterno } from "@/lib/backoffice/route-error"
 import { getFloorRepository } from "@/lib/floor-repository"
 
 const NO_STORE = { "Cache-Control": "no-store" }
@@ -22,6 +23,11 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json(UNAUTHORIZED, { status: 401, headers: NO_STORE })
   }
 
-  await getFloorRepository().reiniciarDemo()
+  try {
+    await getFloorRepository().reiniciarDemo()
+  } catch (err) {
+    // D5: never an unhandled throw -- see lib/backoffice/route-error.ts.
+    return respuestaErrorInterno("reiniciarDemo", err)
+  }
   return Response.json({ ok: true }, { headers: NO_STORE })
 }

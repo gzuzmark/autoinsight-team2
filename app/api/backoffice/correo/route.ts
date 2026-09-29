@@ -3,6 +3,7 @@ import "server-only"
 import { readBackofficeToken } from "@/lib/api/backoffice-cookie"
 import { isBackofficeConfigured, isValidToken } from "@/lib/backoffice/key-gate"
 import { appBaseUrl, reportRecipients } from "@/lib/backoffice/reporte-config"
+import { respuestaErrorInterno } from "@/lib/backoffice/route-error"
 import { construirReporteEstadoActual } from "@/lib/backoffice/reporte-estado-actual"
 import { getEmailSender } from "@/lib/email/get-email-sender"
 import { getFloorRepository } from "@/lib/floor-repository"
@@ -30,7 +31,13 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json(UNAUTHORIZED, { status: 401, headers: NO_STORE })
   }
 
-  const estado = await getFloorRepository().estadoDemo()
+  let estado
+  try {
+    estado = await getFloorRepository().estadoDemo()
+  } catch (err) {
+    // D5: never an unhandled throw -- see lib/backoffice/route-error.ts.
+    return respuestaErrorInterno("estadoDemo", err)
+  }
   const email = construirReporteEstadoActual({
     fecha: Date.now(),
     lineas: estado.lineas,

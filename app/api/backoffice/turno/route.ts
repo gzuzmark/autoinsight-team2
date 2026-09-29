@@ -4,6 +4,7 @@ import { readBackofficeToken } from "@/lib/api/backoffice-cookie"
 import { isBackofficeConfigured, isValidToken } from "@/lib/backoffice/key-gate"
 import { appBaseUrl, reportRecipients } from "@/lib/backoffice/reporte-config"
 import { construirReporteTurno } from "@/lib/backoffice/reporte-turno"
+import { respuestaErrorInterno } from "@/lib/backoffice/route-error"
 import { esLineaDemoConocida, InvalidInputError, type LineaDemoConocida } from "@/lib/domain/floor-repository"
 import { getEmailSender } from "@/lib/email/get-email-sender"
 import { enviarConLimite } from "@/lib/email/with-timeout"
@@ -50,7 +51,8 @@ export async function POST(request: Request): Promise<Response> {
     if (err instanceof InvalidInputError) {
       return Response.json(INVALID_LINEA, { status: 400, headers: NO_STORE })
     }
-    throw err
+    // D5: never an unhandled throw -- see lib/backoffice/route-error.ts.
+    return respuestaErrorInterno("simularTurno", err)
   }
 
   const correo = await enviarReporteSiCorresponde(repo, reporte)

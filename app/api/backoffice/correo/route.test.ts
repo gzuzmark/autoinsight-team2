@@ -15,8 +15,11 @@ function req(cookie?: string): Request {
 }
 
 describe("POST /api/backoffice/correo", () => {
+  let repo: InMemoryFloorRepository
+
   beforeEach(() => {
-    setFloorRepositoryForTests(new InMemoryFloorRepository())
+    repo = new InMemoryFloorRepository()
+    setFloorRepositoryForTests(repo)
   })
 
   afterEach(() => {
@@ -50,6 +53,19 @@ describe("POST /api/backoffice/correo", () => {
     expect(res.headers.get("cache-control")).toBe("no-store")
     expect(sender.enviados).toHaveLength(1)
     expect(sender.enviados[0].subject).toContain("Reporte de estado")
+  })
+
+  it("D5: returns a JSON 500 error body (no-store) instead of an unhandled throw when estadoDemo() fails", async () => {
+    vi.stubEnv("BACKOFFICE_KEY", "dev-facilitador")
+    const token = currentToken()!
+    vi.spyOn(repo, "estadoDemo").mockRejectedValue(new Error("boom"))
+
+    const res = await POST(req(token))
+    const body = await res.json()
+
+    expect(res.status).toBe(500)
+    expect(res.headers.get("cache-control")).toBe("no-store")
+    expect(typeof body.error).toBe("string")
   })
 
   it("returns an inline error (never 200) when sending fails", async () => {

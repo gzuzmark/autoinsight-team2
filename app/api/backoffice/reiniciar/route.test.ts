@@ -41,6 +41,19 @@ describe("POST /api/backoffice/reiniciar", () => {
     expect(res.status).toBe(401)
   })
 
+  it("D5: returns a JSON 500 error body (no-store) instead of an unhandled throw when the repository fails", async () => {
+    vi.stubEnv("BACKOFFICE_KEY", "dev-facilitador")
+    const token = currentToken()!
+    vi.spyOn(repo, "reiniciarDemo").mockRejectedValue(new Error("boom"))
+
+    const res = await POST(req(token))
+    const body = await res.json()
+
+    expect(res.status).toBe(500)
+    expect(res.headers.get("cache-control")).toBe("no-store")
+    expect(typeof body.error).toBe("string")
+  })
+
   it("resets the demo and returns 200 with a valid cookie", async () => {
     vi.stubEnv("BACKOFFICE_KEY", "dev-facilitador")
     const token = currentToken()!
