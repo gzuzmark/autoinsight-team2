@@ -36,5 +36,9 @@ function estadoDemoFallback(): EstadoDemo {
       ultimaSimulacion: null,
     })),
     escenarioActivo: null,
+    // G6: the toggle itself lives in the same failed fetch -- default to ON
+    // (its real default) rather than fabricating an "off" the facilitator
+    // never chose; the "Comunicaciones" card stays usable regardless.
+    enviarReporteTurno: true,
   }
 }

@@ -449,6 +449,7 @@ export type Database = {
         Returns: undefined
       }
       demo_autoresolver: { Args: { p_antiguedad?: string }; Returns: number }
+      demo_enviar_reporte_turno: { Args: never; Returns: boolean }
       demo_estado_activo: { Args: never; Returns: string }
       demo_estado_lineas: { Args: never; Returns: Json }
       demo_generar_alertas: {
@@ -475,6 +476,10 @@ export type Database = {
         }
       }
       demo_reiniciar: { Args: never; Returns: undefined }
+      demo_set_enviar_reporte_turno: {
+        Args: { p_valor: boolean }
+        Returns: undefined
+      }
       demo_simular_turno: {
         Args: { p_cantidad?: number; p_sesion_id: string }
         Returns: {

@@ -283,6 +283,40 @@ describe("InMemoryFloorRepository", () => {
       const estado = await repo.estadoDemo()
       expect(estado.escenarioActivo).toBeNull()
     })
+
+    it("G6: returns the shift-report data (new alerts, post-shift KPI states, open-alert count)", async () => {
+      const reporte = await repo.simularTurno(LINEA_ACTIVA)
+      expect(reporte.linea).toBe(LINEA_ACTIVA)
+      expect(Array.isArray(reporte.nuevasAlertas)).toBe(true)
+      expect(reporte.nuevasAlertas.length).toBeGreaterThan(0)
+      expect(reporte.indicadores.length).toBeGreaterThan(0)
+      for (const ind of reporte.indicadores) {
+        expect(["ok", "atencion", "parar"]).toContain(ind.estado)
+      }
+      const estado = await repo.estadoDemo()
+      const linea = estado.lineas.find((l) => l.nombre === LINEA_ACTIVA)!
+      expect(reporte.alertasAbiertas).toBe(linea.alertasAbiertas)
+    })
+  })
+
+  describe("setEnviarReporteTurno (G6)", () => {
+    it("defaults to ON and is reflected in estadoDemo", async () => {
+      const estado = await repo.estadoDemo()
+      expect(estado.enviarReporteTurno).toBe(true)
+    })
+
+    it("can be turned off and back on, independent of demo state", async () => {
+      await repo.setEnviarReporteTurno(false)
+      expect((await repo.estadoDemo()).enviarReporteTurno).toBe(false)
+
+      // A facilitator preference, not demo state: reset/scenario must not
+      // reset it.
+      await repo.reiniciarDemo()
+      expect((await repo.estadoDemo()).enviarReporteTurno).toBe(false)
+
+      await repo.setEnviarReporteTurno(true)
+      expect((await repo.estadoDemo()).enviarReporteTurno).toBe(true)
+    })
   })
 
   describe("aplicarEscenario (G3)", () => {

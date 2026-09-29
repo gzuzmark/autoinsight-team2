@@ -9,6 +9,7 @@ import type {
   FloorRepository,
   IndicadorTablero,
   LineaDemoConocida,
+  ReporteTurnoDatos,
   Resolucion,
   Tablero,
   UsuarioLogin,
@@ -161,6 +162,10 @@ export class InMemoryFloorRepository implements FloorRepository {
   /** G3: id of the last scenario applied via aplicarEscenario, or null.
    * Cleared by reiniciarDemo() and simularTurno() -- see EstadoDemo's doc. */
   private escenarioActivo: EscenarioId | null = null
+  /** G6: "Enviar reporte al simular turno" toggle, default ON. NOT reset by
+   * reiniciarDemo()/aplicarEscenario() -- it is a facilitator preference,
+   * not demo state (mirrors the Supabase adapter's singleton column). */
+  private enviarReporteTurno = true
   private ultimaActualizacion = Date.now()
   private readonly sesiones = new Map<string, Sesion>()
   /** Epoch ms of each user's most recent closed session (their "last
@@ -240,7 +245,12 @@ export class InMemoryFloorRepository implements FloorRepository {
         }
       }),
       escenarioActivo: this.escenarioActivo,
+      enviarReporteTurno: this.enviarReporteTurno,
     }
+  }
+
+  async setEnviarReporteTurno(valor: boolean): Promise<void> {
+    this.enviarReporteTurno = valor
   }
 
   async reiniciarDemo(): Promise<void> {
@@ -256,7 +266,7 @@ export class InMemoryFloorRepository implements FloorRepository {
     // sesiones/usuarios/usuarios_pin alone.
   }
 
-  async simularTurno(linea: LineaDemoConocida): Promise<void> {
+  async simularTurno(linea: LineaDemoConocida): Promise<ReporteTurnoDatos> {
     if (!esLineaDemoConocida(linea) || !this.lineasEstado.has(linea)) {
       throw new InvalidInputError(`Línea desconocida: ${linea}`)
     }
@@ -271,6 +281,15 @@ export class InMemoryFloorRepository implements FloorRepository {
     if (linea === LINEA.nombre) this.ultimaActualizacion = ahora
     // G3: a shift makes a previously-applied scenario no longer exact.
     this.escenarioActivo = null
+
+    // G6: report data for the caller -- built from the same post-shift
+    // state just written above, never a separate re-derivation.
+    return {
+      linea,
+      nuevasAlertas: resultado.agregadas,
+      indicadores: resultado.indicadoresState.map(indicadorATablero),
+      alertasAbiertas: activeAlerts(resultado.alertas).length,
+    }
   }
 
   async aplicarEscenario(id: EscenarioId): Promise<void> {

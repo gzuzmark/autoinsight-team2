@@ -12,6 +12,7 @@ describe("resolverEstadoDemo (C4, RDD review G2)", () => {
         ultimaSimulacion: null,
       })),
       escenarioActivo: null,
+      enviarReporteTurno: true,
     }
     const resultado = resolverEstadoDemo({ ok: true, data: real })
     expect(resultado.estadoDemo).toBe(real)

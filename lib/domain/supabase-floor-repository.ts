@@ -5,7 +5,9 @@ import type {
   EscenarioId,
   EstadoDemo,
   FloorRepository,
+  IndicadorTablero,
   LineaDemoConocida,
+  ReporteTurnoDatos,
   Resolucion,
   Tablero,
   UsuarioLogin,
@@ -80,12 +82,14 @@ export class SupabaseFloorRepository implements FloorRepository {
   }
 
   async estadoDemo(): Promise<EstadoDemo> {
-    const [lineasResult, activoResult] = await Promise.all([
+    const [lineasResult, activoResult, reporteResult] = await Promise.all([
       this.client.rpc("demo_estado_lineas"),
       this.client.rpc("demo_estado_activo"),
+      this.client.rpc("demo_enviar_reporte_turno"),
     ])
     if (lineasResult.error) throw this.mapError(lineasResult.error)
     if (activoResult.error) throw this.mapError(activoResult.error)
+    if (reporteResult.error) throw this.mapError(reporteResult.error)
 
     const filas = (lineasResult.data ?? []) as EstadoLineaRow[]
     const activo = activoResult.data as string | null
@@ -101,7 +105,15 @@ export class SupabaseFloorRepository implements FloorRepository {
       // G3: an active scenario reported by a row this adapter does not know
       // (e.g. a stale/renamed id) degrades to null rather than throwing.
       escenarioActivo: esEscenarioId(activo) ? activo : null,
+      // G6: reporteResult.data is boolean | null; null (should not happen --
+      // the singleton row always has a value) degrades to the real default.
+      enviarReporteTurno: reporteResult.data ?? true,
     }
+  }
+
+  async setEnviarReporteTurno(valor: boolean): Promise<void> {
+    const { error } = await this.client.rpc("demo_set_enviar_reporte_turno", { p_valor: valor })
+    if (error) throw this.mapError(error)
   }
 
   async reiniciarDemo(): Promise<void> {
@@ -109,12 +121,53 @@ export class SupabaseFloorRepository implements FloorRepository {
     if (error) throw this.mapError(error)
   }
 
-  async simularTurno(linea: LineaDemoConocida): Promise<void> {
+  async simularTurno(linea: LineaDemoConocida): Promise<ReporteTurnoDatos> {
     if (!esLineaDemoConocida(linea)) {
       throw new InvalidInputError(`Línea desconocida: ${linea}`)
     }
-    const { error } = await this.client.rpc("demo_simular_turno_linea", { p_linea: linea, p_cantidad: 2 })
+    const { data, error } = await this.client.rpc("demo_simular_turno_linea", { p_linea: linea, p_cantidad: 2 })
     if (error) throw this.mapError(error)
+
+    // G6: `demo_simular_turno_linea` already returns the newly-generated
+    // alerts (`setof public.alertas`, see the migration) -- no separate
+    // diff needed. KPI states after the shift and the still-open count come
+    // from two more reads, done here rather than adding yet another RPC:
+    // `public.indicadores` (unlike private.demo_configuracion) IS a public-
+    // schema table, reachable directly with the service-role client.
+    const { data: lineaRow, error: lineaError } = await this.client
+      .from("lineas")
+      .select("id")
+      .eq("nombre", linea)
+      .single()
+    if (lineaError) throw this.mapError(lineaError)
+
+    const [{ data: indicadoresRows, error: indicadoresError }, { count: alertasAbiertas, error: countError }] =
+      await Promise.all([
+        this.client.from("indicadores").select("clave,nombre,detalle,estado").eq("linea_id", lineaRow.id),
+        this.client
+          .from("alertas")
+          .select("id", { count: "exact", head: true })
+          .eq("linea_id", lineaRow.id)
+          .eq("estado", "nueva"),
+      ])
+    if (indicadoresError) throw this.mapError(indicadoresError)
+    if (countError) throw this.mapError(countError)
+
+    return {
+      linea,
+      nuevasAlertas: (data ?? []).map((a): Alerta => ({
+        id: a.id,
+        severidad: a.severidad,
+        titulo: a.titulo,
+        estacion: "",
+        timestamp: new Date(a.creada_en).getTime(),
+        estado: "nueva",
+      })),
+      indicadores: (indicadoresRows ?? []).map(
+        (i): IndicadorTablero => ({ id: i.clave, nombre: i.nombre, detalle: i.detalle, estado: i.estado }),
+      ),
+      alertasAbiertas: alertasAbiertas ?? 0,
+    }
   }
 
   async aplicarEscenario(id: EscenarioId): Promise<void> {
