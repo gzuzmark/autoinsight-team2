@@ -58,8 +58,8 @@ describe("POST /api/backoffice/push", () => {
     const sender = new LogPushSender()
     setPushSenderForTests(sender)
     const store = new InMemoryPushSubscriptionStore()
-    await store.guardar({ endpoint: "https://push.example.com/1", keys: { p256dh: "p", auth: "a" } })
-    await store.guardar({ endpoint: "https://push.example.com/2", keys: { p256dh: "p", auth: "a" } })
+    await store.guardar({ endpoint: "https://fcm.googleapis.com/fcm/send/1", keys: { p256dh: "p", auth: "a" } })
+    await store.guardar({ endpoint: "https://fcm.googleapis.com/fcm/send/2", keys: { p256dh: "p", auth: "a" } })
     setPushSubscriptionStoreForTests(store)
 
     const res = await POST(req(token))

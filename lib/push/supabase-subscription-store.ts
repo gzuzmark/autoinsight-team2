@@ -3,7 +3,7 @@ import "server-only"
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 import type { Database } from "@/lib/supabase/database.types"
 import type { PushSubscriptionData } from "@/lib/push/sender"
-import type { PushSubscriptionStore } from "@/lib/push/subscription-store"
+import { MAX_SUSCRIPCIONES, SubscriptionLimitError, type PushSubscriptionStore } from "@/lib/push/subscription-store"
 
 /**
  * Real-backend adapter for `public.push_subscripciones` (migration
@@ -16,11 +16,37 @@ import type { PushSubscriptionStore } from "@/lib/push/subscription-store"
 export class SupabasePushSubscriptionStore implements PushSubscriptionStore {
   private readonly client: SupabaseClient<Database>
 
-  constructor(url: string, secretKey: string) {
+  /** `maxSuscripciones` defaults to the production cap; tests inject a
+   * small value so the cap can be exercised without inserting hundreds of
+   * real rows against the local stack. */
+  constructor(
+    url: string,
+    secretKey: string,
+    private readonly maxSuscripciones: number = MAX_SUSCRIPCIONES,
+  ) {
     this.client = createClient<Database>(url, secretKey, { auth: { persistSession: false } })
   }
 
   async guardar(subscription: PushSubscriptionData): Promise<void> {
+    const { data: existente, error: existenteError } = await this.client
+      .from("push_subscripciones")
+      .select("id")
+      .eq("endpoint", subscription.endpoint)
+      .maybeSingle()
+    if (existenteError) throw new Error(existenteError.message)
+
+    // Cap check only blocks a genuinely new endpoint -- re-subscribing an
+    // existing one must keep working even once the cap is reached (upsert).
+    if (!existente) {
+      const { count, error: countError } = await this.client
+        .from("push_subscripciones")
+        .select("*", { count: "exact", head: true })
+      if (countError) throw new Error(countError.message)
+      if ((count ?? 0) >= this.maxSuscripciones) {
+        throw new SubscriptionLimitError()
+      }
+    }
+
     const { error } = await this.client
       .from("push_subscripciones")
       .upsert(

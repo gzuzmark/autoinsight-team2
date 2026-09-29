@@ -9,8 +9,10 @@
 --
 -- `/oficina` has no auth (O-D4): "anyone with the URL can subscribe" is
 -- documented and accepted for this demo (README) -- the endpoint itself is
--- validated (https, size limits) before it ever reaches this table (see
--- lib/push/validate-subscription.ts), but there is no per-user ownership
+-- validated (https, real push-service host allowlist, size limits) before
+-- it ever reaches this table (see lib/push/validate-subscription.ts), and
+-- the total row count is capped app-side (MAX_SUSCRIPCIONES, see
+-- lib/push/subscription-store.ts), but there is no per-user ownership
 -- check on top of that.
 create table public.push_subscripciones (
   id uuid primary key default gen_random_uuid(),

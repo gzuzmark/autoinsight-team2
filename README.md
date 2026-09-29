@@ -478,9 +478,21 @@ happens in the route handlers.
 **No auth on the subscribe endpoint**: unlike every `/api/backoffice/*`
 route, `POST`/`DELETE /api/oficina/push/suscripcion` are **not**
 cookie-gated -- `/oficina` itself has no auth (O-D4), so anyone with that
-URL can subscribe or unsubscribe any endpoint. Accepted for this demo; the
-only gate is `lib/push/validate-subscription.ts` (the endpoint must be
-`https`, both the endpoint and each key are size-bounded).
+URL can subscribe or unsubscribe any endpoint. Accepted for this demo, but
+because the repo and deploy URL are public, `lib/push/validate-subscription.ts`
+only accepts an `endpoint` on the actual Web Push service hosts real
+browsers use (`fcm.googleapis.com`, `updates.push.services.mozilla.com`,
+`web.push.apple.com`, `*.notify.windows.com`) -- exact host match, https
+only, no userinfo, default port only -- so this endpoint cannot be turned
+into a relay that POSTs to an arbitrary attacker-controlled URL on every
+ALTA alert. `lib/push/notify.ts` re-checks the same allowlist at send time
+and deletes any stored subscription that no longer passes it, as defense in
+depth for rows written before this landed. The subscription table is also
+capped (`MAX_SUSCRIPCIONES`, 200 rows in both the in-memory and Supabase
+adapters): a genuinely new endpoint is rejected with 429 once the cap is
+reached, while re-subscribing an already-stored endpoint keeps working
+(upsert). The route additionally caps the request body itself (8 KB) ahead
+of any parsing.
 
 **Browser/iOS caveats**: Web Push works in Chrome/Edge/Firefox on desktop
 and Android directly from the browser tab. **iOS Safari requires the app
