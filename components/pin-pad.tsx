@@ -48,7 +48,11 @@ export function PinPad({
   const teclas = ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
 
   return (
-    <div className="flex min-h-dvh w-full flex-col items-center justify-center gap-6 px-4 py-10 kiosk:min-h-full kiosk:gap-8 kiosk:px-10 kiosk:py-0">
+    // G8: ph-no-capture excludes the whole PIN pad from PostHog session
+    // replay (belt and suspenders alongside session_recording.maskAllInputs
+    // -- lib/analytics/posthog-client.ts) even though the digits themselves
+    // are never rendered as text, only as a dot count.
+    <div className="ph-no-capture flex min-h-dvh w-full flex-col items-center justify-center gap-6 px-4 py-10 kiosk:min-h-full kiosk:gap-8 kiosk:px-10 kiosk:py-0">
       <div className="flex items-center gap-4">
         <span
           aria-hidden
