@@ -348,6 +348,30 @@ export type Database = {
         }
         Relationships: []
       }
+      push_subscripciones: {
+        Row: {
+          auth: string
+          creada_en: string
+          endpoint: string
+          id: string
+          p256dh: string
+        }
+        Insert: {
+          auth: string
+          creada_en?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+        }
+        Update: {
+          auth?: string
+          creada_en?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+        }
+        Relationships: []
+      }
       sesiones: {
         Row: {
           fin: string | null

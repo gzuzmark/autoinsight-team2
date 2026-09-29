@@ -1,7 +1,7 @@
 -- RLS + grants tests (D17): RLS enabled on every public table, and
 -- anon/authenticated have no table privileges and no EXECUTE on any RPC.
 begin;
-select plan(24);
+select plan(27);
 
 -- RLS enabled on every public table -----------------------------------------
 select is(
@@ -17,8 +17,8 @@ select is(
   (select count(*)::int from pg_catalog.pg_class c
      join pg_catalog.pg_namespace n on n.oid = c.relnamespace
      where n.nspname = 'public' and c.relkind = 'r'),
-  11,
-  'exactly 11 tables exist in public (sanity check for the assertion above; E3 added demo_panel)'
+  12,
+  'exactly 12 tables exist in public (sanity check for the assertion above; G7b added push_subscripciones)'
 );
 
 select is(
@@ -71,6 +71,18 @@ select ok(
 select ok(
   not has_table_privilege('anon', 'public.demo_panel', 'select'),
   'anon cannot select demo_panel'
+);
+select ok(
+  not has_table_privilege('anon', 'public.push_subscripciones', 'select'),
+  'anon cannot select push_subscripciones'
+);
+select ok(
+  not has_table_privilege('authenticated', 'public.push_subscripciones', 'select'),
+  'authenticated cannot select push_subscripciones'
+);
+select ok(
+  has_table_privilege('service_role', 'public.push_subscripciones', 'select'),
+  'service_role can select push_subscripciones'
 );
 select ok(
   not has_table_privilege('authenticated', 'public.demo_panel', 'update'),
