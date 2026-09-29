@@ -507,6 +507,45 @@ notification-data -> url mappings mirror the pure, unit-tested helpers in
 `lib/push/sw-helpers.ts` (kept in sync by hand -- a service worker script
 has no bundler, so it cannot `import` them directly).
 
+## Office notification bell
+
+`/oficina`'s header also has a **notification bell**
+(`components/oficina/notification-bell.tsx`, YouTube-style), next to
+"Activar notificaciones". It shows an unread-count badge (hidden at 0,
+capped at "9+") and, on click, opens an accessible dropdown listing recent
+ALTA alerts: title, line · station, relative time ("hace 3 min"), and an
+unread dot. Clicking an item opens `/oficina/alertas/<id>`, marks it read,
+and closes the dropdown; "Marcar todas como leídas" clears every unread dot
+at once.
+
+**Source and window (decided 2026-09-29)**: `GET /api/oficina/notificaciones`
+(no auth, same as every other `/api/oficina/**` route) returns the most
+recent **20** ALTA (severidad `parar`) alerts across every known line,
+newest first -- a fixed count, not a time window, since a guerrilla-testing
+session never comes close to generating 20 of them; the cap only guards
+against an unbounded query. An ALTA alert is included whether it is still
+open or already resolved ("open or recent"): a manager checking the bell
+after a participant dismissed a critical alert should still see it
+happened.
+
+**Read state** is tracked **per browser** in `localStorage`
+(`lib/oficina/notificaciones.ts`), never sent to the server -- two desks
+looking at the same alert each track "read" independently. Every access is
+wrapped in try/catch and degrades to "nothing read yet" when storage is
+unavailable (private browsing, blocked storage, etc.) instead of throwing.
+
+**Refresh**: polls `GET /api/oficina/notificaciones` every 15s while the
+tab is visible (Page Visibility API, no overlapping requests -- the same
+`lib/api/poller.ts` the floor's D29 auto-refresh uses), and refetches
+immediately when `public/sw.js`'s `push` handler posts
+`{ type: "push-recibido" }` to every open client right after showing a
+notification, so the bell does not wait up to 15s to reflect a push that
+already arrived.
+
+**Analytics**: opening the dropdown captures `oficina_campana_abierta`;
+clicking an item captures `oficina_notificacion_click` (`alerta_id`,
+`desde: "campana"`) -- see "Product analytics (PostHog)" below.
+
 ## Product analytics (PostHog)
 
 G8 (G4 folded in -- "Decisions", 2026-09-28: session events go ONLY to
