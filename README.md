@@ -30,17 +30,24 @@ Open [http://localhost:3100](http://localhost:3100) with your browser to see the
 - `/oficina` -- office desk view: Resumen de planta (KPIs, FPY trend, defect
   Pareto, alert heatmap, latest alerts). Not subject to the floor design rules
   (D5/D11/D12) -- see `app/oficina/**` and `components/oficina/**`.
-- `/oficina/alertas/[id]` -- alert investigation screen (static sample data).
+- `/oficina/alertas/[id]` -- alert investigation screen. G7b: loads real
+  alert data (`FloorRepository#obtenerAlerta`) first for any known alert
+  id, across every line; the original static samples
+  (`lib/oficina/mock-data.ts`) still work for their own sample ids (the
+  Resumen table links to those). See "Office push notifications" below for
+  what's real vs. "Ejemplo" on a real alert.
 - `/oficina/reportes` -- report list and "Programar reporte" form.
 - `/backoffice` -- facilitator back office for guerrilla-testing sessions:
   reset the demo (`POST /api/backoffice/reiniciar`), trigger a shift per
   line (`POST /api/backoffice/turno`, body `{ "linea": ... }`), apply a
-  predefined scenario (`POST /api/backoffice/escenario`), and send report
+  predefined scenario (`POST /api/backoffice/escenario`), send report
   emails (`POST /api/backoffice/correo`, `POST /api/backoffice/configuracion`
-  -- see "Shift report email") against live data; session log, script and
-  notes stay inert until their own tasks. Deliberately **not** linked from
-  `/`, `/planta` or `/oficina` -- reachable only by typing the URL, and
-  gated server-side behind the `BACKOFFICE_KEY` facilitator key (see
+  -- see "Shift report email"), and send a push for the most recent open
+  ALTA alert (`POST /api/backoffice/push` -- see "Office push
+  notifications") against live data; session log, script and notes stay
+  inert until their own tasks. Deliberately **not** linked from `/`,
+  `/planta` or `/oficina` -- reachable only by typing the URL, and gated
+  server-side behind the `BACKOFFICE_KEY` facilitator key (see
   "Environment variables" below and "Simulate a shift (demo)").
   `lib/backoffice/no-link-guard.test.ts` fails CI if any other page ever
   links to it.
@@ -72,11 +79,14 @@ targets under 88px, clipped content, an unreachable alert card/overflow line,
 or console errors. It runs the same way against either data source
 (`DATA_SOURCE=mock`, the default, or `DATA_SOURCE=supabase` against a running
 local stack). It also runs an office smoke (`/`, `/oficina`,
-`/oficina/alertas/<id>`, `/oficina/reportes`) that checks for horizontal
-overflow, console errors, and the three navigation links between the
-selector, office, and floor apps -- office pages are not held to the floor's
-24px/88px rules. It also runs a `/backoffice` smoke: without the session
-cookie it must show only the key form (no dashboard content); with
+`/oficina/alertas/<id>` for both a static sample id and a real mock-mode
+alert id, `/oficina/reportes`) that checks for horizontal overflow, console
+errors, and the three navigation links between the selector, office, and
+floor apps -- office pages are not held to the floor's 24px/88px rules, and
+the header's "Activar notificaciones" button (G7b, see "Office push
+notifications") is asserted visible at every viewport. It also runs a
+`/backoffice` smoke: without the session cookie it must show only the key
+form (no dashboard content); with
 `BACKOFFICE_KEY` set it logs in once and checks the dashboard renders with
 no horizontal overflow or console errors at all four viewports, then logs
 out and confirms it returns to the key form -- including flipping the G6
@@ -103,6 +113,9 @@ never commit `.env.local` or a real `SUPABASE_SECRET_KEY`.
 | `GMAIL_APP_PASSWORD` | secret (Gmail app password) | — | G6, paired with `GMAIL_USER`. **Not** the Gmail account password -- an [app password](https://myaccount.google.com/apppasswords) (needs 2-Step Verification enabled on the account). Never commit a real value. |
 | `REPORT_RECIPIENTS` | comma-separated email list | `demo-autoinsight@mailinator.com` | G6. Who receives the shift-report and "Enviar correo ahora" emails. |
 | `APP_BASE_URL` | URL | `https://autoinsight-team2-nine.vercel.app` | G6. Base URL used to build the "Ver el tablero" link in report emails (the route appends `/planta`). |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | VAPID public key (base64url) | — | G7b office Web Push. Read in the browser (`PushManager#subscribe`'s `applicationServerKey`) -- intentionally `NEXT_PUBLIC_*`, unlike every other secret in this table. See "Office push notifications" below for how to generate it. |
+| `VAPID_PRIVATE_KEY` | VAPID private key (base64url) | — | G7b, paired with the public key above. Server-only, never `NEXT_PUBLIC_*`. Missing (with the public key) falls back to a log-only push sender (never fails a shift/scenario/"Disparar push"). |
+| `VAPID_SUBJECT` | `mailto:` URL | `mailto:demo-autoinsight@mailinator.com` | G7b. The Web Push protocol's required contact URL for the push service. |
 
 To run the app against a local Supabase stack instead of mock data:
 
@@ -421,6 +434,63 @@ and sends a current-state snapshot across all three lines (state word +
 open-alert count per line) right away. Unlike the shift-triggered report, a
 send failure here IS reported as an error (this button's only job is to
 send).
+
+## Office push notifications
+
+`/oficina`'s header has an **"Activar notificaciones"** button
+(`components/oficina/push-toggle.tsx`). It only requests browser
+notification permission on click (never on page load); the button shows the
+current state: "Activar notificaciones" (not yet subscribed), "Activadas"
+(subscribed -- click to "Desactivar"), "Bloqueadas por el navegador"
+(permission previously denied), or "No compatible con este navegador"
+(no Push API/service-worker support). Clicking it registers
+`public/sw.js`, subscribes via `PushManager#subscribe`, and posts the
+subscription to `POST /api/oficina/push/suscripcion` (unsubscribing posts
+to the same route's `DELETE`).
+
+**Generate a VAPID keypair** (needed for real delivery -- without it the
+app falls back to a log-only push sender, same as the email port when Gmail
+creds are missing):
+
+```bash
+corepack pnpm exec web-push generate-vapid-keys
+```
+
+Set the printed `publicKey` as `NEXT_PUBLIC_VAPID_PUBLIC_KEY` and
+`privateKey` as `VAPID_PRIVATE_KEY` (see "Environment variables" above).
+
+**When a push is sent**: after a successful `/backoffice` "Simular turno"
+or "Aplicar escenario", every new ALTA (severidad `parar`) alert triggers
+one push per stored office subscription (`lib/push/notify.ts`) -- bounded
+and never fails the shift/scenario itself; a subscription the push service
+reports gone (HTTP 404/410) is deleted automatically. The back office's
+"Comunicaciones" card also has a **"Disparar push"** button
+(`POST /api/backoffice/push`) that sends a push for the most recent open
+ALTA alert on demand, independent of any shift. Clicking a notification
+focuses/opens `/oficina/alertas/<id>` for that alert.
+
+**Note:** same limitation as the shift-report email -- a shift triggered
+directly from Supabase (`demo_panel` / `demo_simular_turno_linea`) does
+**not** send a push; only `POST /api/backoffice/turno`/`escenario` do,
+since the RPCs themselves have no notion of push and the sending only
+happens in the route handlers.
+
+**No auth on the subscribe endpoint**: unlike every `/api/backoffice/*`
+route, `POST`/`DELETE /api/oficina/push/suscripcion` are **not**
+cookie-gated -- `/oficina` itself has no auth (O-D4), so anyone with that
+URL can subscribe or unsubscribe any endpoint. Accepted for this demo; the
+only gate is `lib/push/validate-subscription.ts` (the endpoint must be
+`https`, both the endpoint and each key are size-bounded).
+
+**Browser/iOS caveats**: Web Push works in Chrome/Edge/Firefox on desktop
+and Android directly from the browser tab. **iOS Safari requires the app
+to be added to the Home Screen first** (`app/manifest.ts` makes that
+possible) and opened from that Home Screen icon -- push does not work from
+a normal Safari tab on iOS, and needs iOS 16.4+. `public/sw.js` handles the
+`push`/`notificationclick` events; its payload -> notification-options and
+notification-data -> url mappings mirror the pure, unit-tested helpers in
+`lib/push/sw-helpers.ts` (kept in sync by hand -- a service worker script
+has no bundler, so it cannot `import` them directly).
 
 ## How KPI tiles change
 
