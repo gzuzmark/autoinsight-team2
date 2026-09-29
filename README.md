@@ -148,9 +148,11 @@ URL, DB connection string, and anon/service_role keys (well-known local
 defaults, safe to keep out of committed files but not sensitive to print).
 
 Seed data (`supabase/seed.sql`, loaded automatically by `db reset`): one
-plant ("Planta Norte"), 3 lines, stations, the 6 mock users from
-`lib/mock-data.ts` (PINs hashed with bcrypt at seed time), per-line KPIs,
-and Línea 3's starting alerts matching `ALERTAS_INICIALES`.
+plant ("Planta Norte"), 3 lines, stations, the 7 mock users from
+`lib/mock-data.ts` -- PIN **1234 for every user** (H2), hashed with bcrypt at
+seed time: five on Línea 3, one on Línea 1, and one on Línea 2 (Gabi Paz,
+H1) -- per-line KPIs, and Línea 3's starting alerts matching
+`ALERTAS_INICIALES`.
 
 To generate demo traffic by hand (no cron needed):
 
