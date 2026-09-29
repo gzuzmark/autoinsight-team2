@@ -94,17 +94,79 @@ describe("SupabaseFloorRepository#estadoDemo (Batch I: per-line KPI chips)", () 
       }
       if (fn === "demo_estado_activo") return Promise.resolve({ data: null, error: null })
       if (fn === "demo_enviar_reporte_turno") return Promise.resolve({ data: true, error: null })
+      if (fn === "demo_participante_actual") return Promise.resolve({ data: 3, error: null })
       throw new Error(`unexpected rpc: ${fn}`)
     })
 
     const estado = await repo.estadoDemo()
 
     expect(estado.datosDisponibles).toBe(true)
+    expect(estado.participanteActual).toBe(3)
     const linea = estado.lineas.find((l) => l.nombre === "Línea 3 · Motores")!
     expect(linea.indicadores).toEqual([
       { clave: "fpy", estado: "parar" },
       { clave: "dph", estado: "ok" },
       { clave: "scrap", estado: "ok" },
     ])
+  })
+})
+
+describe("SupabaseFloorRepository#tablero (G8: participant field)", () => {
+  it("includes the participant number read alongside the tablero RPC", async () => {
+    const { SupabaseFloorRepository } = await import("@/lib/domain/supabase-floor-repository")
+    const repo = new SupabaseFloorRepository("https://x.test", "secret")
+
+    rpc.mockImplementation((fn: string) => {
+      if (fn === "tablero") {
+        return Promise.resolve({
+          data: {
+            planta: { nombre: "Planta Norte" },
+            linea: { nombre: "Línea 3 · Motores", turno: "Turno mañana" },
+            usuario: { id: "u1", nombre: "Ana Ríos", iniciales: "AR", color: "#000" },
+            indicadores: [],
+            alertas: [],
+            ultima_visita: null,
+            nuevas_ids: [],
+            cambios_desde_visita: 0,
+            ultima_actualizacion: "2026-09-29T00:00:00.000Z",
+          },
+          error: null,
+        })
+      }
+      if (fn === "demo_participante_actual") return Promise.resolve({ data: 4, error: null })
+      throw new Error(`unexpected rpc: ${fn}`)
+    })
+
+    const tablero = await repo.tablero("session-1")
+    expect(tablero.participante).toBe(4)
+  })
+
+  it("degrades to 1 when the participant read fails, without failing the tablero fetch", async () => {
+    const { SupabaseFloorRepository } = await import("@/lib/domain/supabase-floor-repository")
+    const repo = new SupabaseFloorRepository("https://x.test", "secret")
+
+    rpc.mockImplementation((fn: string) => {
+      if (fn === "tablero") {
+        return Promise.resolve({
+          data: {
+            planta: { nombre: "Planta Norte" },
+            linea: { nombre: "Línea 3 · Motores", turno: "Turno mañana" },
+            usuario: { id: "u1", nombre: "Ana Ríos", iniciales: "AR", color: "#000" },
+            indicadores: [],
+            alertas: [],
+            ultima_visita: null,
+            nuevas_ids: [],
+            cambios_desde_visita: 0,
+            ultima_actualizacion: "2026-09-29T00:00:00.000Z",
+          },
+          error: null,
+        })
+      }
+      if (fn === "demo_participante_actual") return Promise.resolve({ data: null, error: { message: "boom" } })
+      throw new Error(`unexpected rpc: ${fn}`)
+    })
+
+    const tablero = await repo.tablero("session-1")
+    expect(tablero.participante).toBe(1)
   })
 })

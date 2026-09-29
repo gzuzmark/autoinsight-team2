@@ -52,6 +52,11 @@ export type Tablero = {
   /** Epoch ms of the end of the user's previous session, or null on first
    * visit / no previous closed session (D9). */
   ultimaVisita: number | null
+  /** G8: current guerrilla-testing participant number (`private.demo_configuracion
+   * .participante_actual`), so the client can `posthog.identify("P<n>")`
+   * right after login (lib/analytics/posthog-client.ts) without a second
+   * request. Bumped only by `nuevoParticipante()`. */
+  participante: number
   /** Ids of currently-active alerts created after `ultimaVisita` (D9). */
   nuevasIds: string[]
   /** K2: count of ALL alerts on the line created after `ultimaVisita`,
@@ -119,6 +124,11 @@ export type LineaEstadoDemo = {
 
 export type EstadoDemo = {
   lineas: LineaEstadoDemo[]
+  /** G8: current guerrilla-testing participant number for the back-office
+   * "Estado de la demo" card ("Participante actual P<n>"). Null only in the
+   * D3 fallback placeholder (`datosDisponibles: false`) -- a real adapter
+   * always has a value (the underlying column defaults to 1). */
+  participanteActual: number | null
   /** G3: id of the scenario last applied via `aplicarEscenario`, or null
    * when none is active (never applied, or invalidated -- see
    * `aplicarEscenario`'s doc). */
@@ -280,4 +290,9 @@ export interface FloorRepository {
    * (severidad "parar"/ALTA) alert across every known line, or null when
    * none is open. */
   alertaAltaMasReciente(): Promise<{ linea: LineaDemoConocida; alerta: Alerta } | null>
+
+  /** G8: back office "Nuevo participante" -- resets the demo (same effect
+   * as `reiniciarDemo()`) and advances the participant counter, returning
+   * its new value. */
+  nuevoParticipante(): Promise<number>
 }

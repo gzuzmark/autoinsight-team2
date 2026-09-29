@@ -19,6 +19,7 @@ describe("resolverEstadoDemo (C4, RDD review G2)", () => {
       })),
       escenarioActivo: null,
       enviarReporteTurno: true,
+      participanteActual: 3,
       datosDisponibles: true,
     }
     const resultado = resolverEstadoDemo({ ok: true, data: real })

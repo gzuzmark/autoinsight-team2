@@ -72,7 +72,20 @@ export class SupabaseFloorRepository implements FloorRepository {
   async tablero(sessionId: string): Promise<Tablero> {
     const { data, error } = await this.client.rpc("tablero", { p_sesion_id: sessionId })
     if (error) throw this.mapError(error)
-    return this.mapTablero(data as TableroRow)
+
+    // G8: the participant number is read from the same demo_configuracion
+    // singleton estadoDemo() reads, via a second small RPC -- session
+    // validity was already confirmed by the tablero() RPC above, so this
+    // read cannot itself throw SessionInvalidError; a failure here degrades
+    // to 1 (the column's own default) rather than failing the whole
+    // tablero fetch over an identify-only field.
+    let participante = 1
+    const { data: participanteData, error: participanteError } = await this.client.rpc("demo_participante_actual")
+    if (!participanteError && typeof participanteData === "number") {
+      participante = participanteData
+    }
+
+    return this.mapTablero(data as TableroRow, participante)
   }
 
   async resolverAlerta(sessionId: string, alertaId: string, resolucion: Resolucion): Promise<void> {
@@ -85,14 +98,16 @@ export class SupabaseFloorRepository implements FloorRepository {
   }
 
   async estadoDemo(): Promise<EstadoDemo> {
-    const [lineasResult, activoResult, reporteResult] = await Promise.all([
+    const [lineasResult, activoResult, reporteResult, participanteResult] = await Promise.all([
       this.client.rpc("demo_estado_lineas"),
       this.client.rpc("demo_estado_activo"),
       this.client.rpc("demo_enviar_reporte_turno"),
+      this.client.rpc("demo_participante_actual"),
     ])
     if (lineasResult.error) throw this.mapError(lineasResult.error)
     if (activoResult.error) throw this.mapError(activoResult.error)
     if (reporteResult.error) throw this.mapError(reporteResult.error)
+    if (participanteResult.error) throw this.mapError(participanteResult.error)
 
     const filas = (lineasResult.data ?? []) as EstadoLineaRow[]
     const activo = activoResult.data as string | null
@@ -115,6 +130,11 @@ export class SupabaseFloorRepository implements FloorRepository {
       // G6: reporteResult.data is boolean | null; null (should not happen --
       // the singleton row always has a value) degrades to the real default.
       enviarReporteTurno: reporteResult.data ?? true,
+      // G8: (participanteResult.data as number | null); null should not
+      // happen (the column defaults to 1) -- a real fetch this far never
+      // fabricates a fake participant number, so this stays whatever the
+      // RPC returned (including a genuine null, unlike the boolean above).
+      participanteActual: (participanteResult.data as number | null) ?? null,
       // Batch I: a real fetch that reached this point succeeded -- only the
       // D3 fallback (lib/backoffice/estado-demo-fallback.ts) ever reports
       // false.
@@ -196,6 +216,12 @@ export class SupabaseFloorRepository implements FloorRepository {
     }
   }
 
+  async nuevoParticipante(): Promise<number> {
+    const { data, error } = await this.client.rpc("demo_nuevo_participante")
+    if (error) throw this.mapError(error)
+    return (data as number | null) ?? 1
+  }
+
   async aplicarEscenario(id: EscenarioId): Promise<void> {
     if (!esEscenarioId(id)) {
       throw new InvalidInputError(`Escenario desconocido: ${id}`)
@@ -274,7 +300,7 @@ export class SupabaseFloorRepository implements FloorRepository {
     }
   }
 
-  private mapTablero(row: TableroRow): Tablero {
+  private mapTablero(row: TableroRow, participante: number): Tablero {
     return {
       planta: { nombre: row.planta.nombre },
       linea: { nombre: row.linea.nombre, turno: row.linea.turno },
@@ -300,6 +326,7 @@ export class SupabaseFloorRepository implements FloorRepository {
       })),
       ultimaActualizacion: new Date(row.ultima_actualizacion).getTime(),
       ultimaVisita: row.ultima_visita ? new Date(row.ultima_visita).getTime() : null,
+      participante,
       nuevasIds: row.nuevas_ids,
       cambiosDesdeVisita: row.cambios_desde_visita,
     }

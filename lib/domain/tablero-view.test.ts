@@ -24,6 +24,7 @@ function makeTablero(overrides: Partial<Tablero>): Tablero {
     alertas: [],
     ultimaActualizacion: 0,
     ultimaVisita: null,
+    participante: 1,
     nuevasIds: [],
     cambiosDesdeVisita: 0,
     ...overrides,

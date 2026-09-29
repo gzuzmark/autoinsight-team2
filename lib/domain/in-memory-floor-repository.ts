@@ -193,6 +193,10 @@ export class InMemoryFloorRepository implements FloorRepository {
    * reiniciarDemo()/aplicarEscenario() -- it is a facilitator preference,
    * not demo state (mirrors the Supabase adapter's singleton column). */
   private enviarReporteTurno = true
+  /** G8: mirrors private.demo_configuracion.participante_actual's default
+   * (1) -- bumped only by nuevoParticipante(), never by reiniciarDemo()/
+   * aplicarEscenario() (facilitator identity, not demo state). */
+  private participanteActual = 1
   private ultimaActualizacion = Date.now()
   private readonly sesiones = new Map<string, Sesion>()
   /** Epoch ms of each user's most recent closed session (their "last
@@ -236,6 +240,7 @@ export class InMemoryFloorRepository implements FloorRepository {
       alertas: activas,
       ultimaActualizacion: this.ultimaActualizacion,
       ultimaVisita: sesion.ultimaVisita,
+      participante: this.participanteActual,
       nuevasIds: this.nuevasIdsDesde(activas, sesion.ultimaVisita),
       cambiosDesdeVisita: this.cambiosDesdeVisita(sesion.ultimaVisita),
     }
@@ -284,6 +289,7 @@ export class InMemoryFloorRepository implements FloorRepository {
       }),
       escenarioActivo: this.escenarioActivo,
       enviarReporteTurno: this.enviarReporteTurno,
+      participanteActual: this.participanteActual,
       // Batch I: mock mode derives this synchronously from its own
       // in-memory state -- it cannot fail independently (same rationale as
       // ReporteTurnoDatos#datosDisponibles in simularTurno below).
@@ -380,6 +386,12 @@ export class InMemoryFloorRepository implements FloorRepository {
     this.lineasEstado = nuevoEstado
     this.escenarioActivo = id
     this.ultimaActualizacion = ahora
+  }
+
+  async nuevoParticipante(): Promise<number> {
+    await this.reiniciarDemo()
+    this.participanteActual += 1
+    return this.participanteActual
   }
 
   async obtenerAlerta(id: string): Promise<AlertaDetalle | null> {

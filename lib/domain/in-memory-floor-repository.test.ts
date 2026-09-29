@@ -372,6 +372,38 @@ describe("InMemoryFloorRepository", () => {
     })
   })
 
+  describe("nuevoParticipante (G8)", () => {
+    it("estadoDemo/tablero start at participant 1", async () => {
+      expect((await repo.estadoDemo()).participanteActual).toBe(1)
+      const sessionId = await repo.iniciarSesion(ANA.id, ANA.pin)
+      expect((await repo.tablero(sessionId!)).participante).toBe(1)
+    })
+
+    it("returns the bumped value and is reflected in estadoDemo/tablero", async () => {
+      const nuevo = await repo.nuevoParticipante()
+      expect(nuevo).toBe(2)
+      expect((await repo.estadoDemo()).participanteActual).toBe(2)
+      const sessionId = await repo.iniciarSesion(ANA.id, ANA.pin)
+      expect((await repo.tablero(sessionId!)).participante).toBe(2)
+    })
+
+    it("also resets the demo (same effect as reiniciarDemo)", async () => {
+      await repo.simularTurno(LINEA_ACTIVA)
+      await repo.nuevoParticipante()
+      const estado = await repo.estadoDemo()
+      const activa = estado.lineas.find((l) => l.nombre === LINEA_ACTIVA)!
+      expect(activa.ultimaSimulacion).toBeNull()
+    })
+
+    it("is not reset by reiniciarDemo/aplicarEscenario", async () => {
+      await repo.nuevoParticipante()
+      await repo.reiniciarDemo()
+      expect((await repo.estadoDemo()).participanteActual).toBe(2)
+      await repo.aplicarEscenario("todo-ok")
+      expect((await repo.estadoDemo()).participanteActual).toBe(2)
+    })
+  })
+
   describe("aplicarEscenario (G3)", () => {
     it("throws InvalidInputError for an unknown scenario id", async () => {
       // @ts-expect-error deliberately invalid at runtime
