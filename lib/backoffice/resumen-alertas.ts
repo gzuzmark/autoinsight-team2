@@ -19,5 +19,8 @@ export function formatearResumenAlertas(counts: AlertasPorSeveridad): string {
   const partes = ORDEN.filter((severidad) => counts[severidad] > 0).map(
     (severidad) => `${counts[severidad]} ${SEVERIDAD_PALABRA[severidad]}`,
   )
-  return [`${total} alertas`, ...partes].join(" · ")
+  // F2: singular "1 alerta" for a total of exactly 1 (plural "N alertas"
+  // otherwise).
+  const etiquetaTotal = total === 1 ? "1 alerta" : `${total} alertas`
+  return [etiquetaTotal, ...partes].join(" · ")
 }

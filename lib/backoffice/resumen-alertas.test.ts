@@ -10,6 +10,14 @@ describe("formatearResumenAlertas (H3)", () => {
     expect(formatearResumenAlertas({ parar: 2, atencion: 0, ok: 0 })).toBe("2 alertas · 2 ALTA")
   })
 
+  // F2 (RDD review E1/E2 + batch H, 2026-09-29): a total of exactly 1 must
+  // read "1 alerta", not "1 alertas".
+  it("uses the singular 'alerta' for a total of exactly 1", () => {
+    expect(formatearResumenAlertas({ parar: 1, atencion: 0, ok: 0 })).toBe("1 alerta · 1 ALTA")
+    expect(formatearResumenAlertas({ parar: 0, atencion: 1, ok: 0 })).toBe("1 alerta · 1 MEDIA")
+    expect(formatearResumenAlertas({ parar: 0, atencion: 0, ok: 1 })).toBe("1 alerta · 1 BAJA")
+  })
+
   it("includes every non-zero severity, in ALTA/MEDIA/BAJA order, compactly", () => {
     expect(formatearResumenAlertas({ parar: 2, atencion: 2, ok: 0 })).toBe("4 alertas · 2 ALTA · 2 MEDIA")
     expect(formatearResumenAlertas({ parar: 0, atencion: 1, ok: 3 })).toBe("4 alertas · 1 MEDIA · 3 BAJA")
