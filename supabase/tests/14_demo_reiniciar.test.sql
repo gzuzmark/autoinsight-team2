@@ -123,12 +123,12 @@ select is(
 
 select is(
   (
-    select e ->> 'estado'
+    select e ->> 'estado_kpi'
     from jsonb_array_elements(public.demo_estado_lineas()) e
     where e ->> 'nombre' = 'Línea 3 · Motores'
   ),
   'parar',
-  'Línea 3 reports "parar" (its two seeded parar alerts are the worst active severity)'
+  'Línea 3 reports "parar" (H3: worst of its own fpy/dph/scrap KPI states -- fpy is seeded at 88.4, below the parar threshold)'
 );
 select is(
   (
@@ -141,12 +141,12 @@ select is(
 );
 select is(
   (
-    select e ->> 'estado'
+    select e ->> 'estado_kpi'
     from jsonb_array_elements(public.demo_estado_lineas()) e
     where e ->> 'nombre' = 'Línea 1 · Chasis'
   ),
   'ok',
-  'a line with no active alerts reports "ok"'
+  'a line whose KPIs are all within band reports "ok" (H3: KPI-based, not alert-based)'
 );
 
 select public.demo_simular_turno_linea('Línea 3 · Motores', 1);

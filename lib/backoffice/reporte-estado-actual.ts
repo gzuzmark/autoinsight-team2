@@ -13,7 +13,8 @@ import type { ReporteEmail } from "@/lib/backoffice/reporte-turno"
  */
 export type LineaReporteEstado = {
   nombre: LineaDemoConocida
-  estado: Severidad
+  /** H3: worst KPI state (see LineaEstadoDemo#estadoKpi's doc). */
+  estadoKpi: Severidad
   alertasAbiertas: number
 }
 
@@ -32,7 +33,7 @@ export function construirReporteEstadoActual(input: ReporteEstadoActualInput): R
     lineas.length === 0
       ? "Sin líneas conocidas."
       : lineas
-          .map((l) => `${l.nombre}: ${ESTILOS[l.estado].palabra} (${l.alertasAbiertas} alertas abiertas)`)
+          .map((l) => `${l.nombre}: ${ESTILOS[l.estadoKpi].palabra} (${l.alertasAbiertas} alertas abiertas)`)
           .join("\n")
 
   const htmlLineas =
@@ -41,7 +42,7 @@ export function construirReporteEstadoActual(input: ReporteEstadoActualInput): R
       : `<ul>${lineas
           .map(
             (l) =>
-              `<li>${escapeHtml(l.nombre)}: <strong>${ESTILOS[l.estado].palabra}</strong> (${l.alertasAbiertas} alertas abiertas)</li>`,
+              `<li>${escapeHtml(l.nombre)}: <strong>${ESTILOS[l.estadoKpi].palabra}</strong> (${l.alertasAbiertas} alertas abiertas)</li>`,
           )
           .join("")}</ul>`
 

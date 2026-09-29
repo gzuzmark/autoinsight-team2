@@ -76,11 +76,27 @@ export function esLineaDemoConocida(valor: unknown): valor is LineaDemoConocida 
   return typeof valor === "string" && (LINEAS_DEMO_CONOCIDAS as readonly string[]).includes(valor)
 }
 
+/** H3: open ("nueva") alert count per severity, keyed the same way KPI
+ * states are ("parar"/"atencion"/"ok" -- rendered with the alert-vocabulary
+ * words ALTA/MEDIA/BAJA via `SEVERIDAD_PALABRA`, D8). */
+export type AlertasPorSeveridad = Record<Severidad, number>
+
 /** G2 back-office "Estado de la demo" card: one row per known line. */
 export type LineaEstadoDemo = {
   nombre: LineaDemoConocida
-  /** Worst active-alert severity on the line, or "ok" when it has none. */
-  estado: Severidad
+  /**
+   * H3: worst KPI state of the line -- the same computation the floor's own
+   * KPI tiles use (worst of fpy/dph/scrap), NOT the worst open alert's
+   * severity. Before H3 this field mapped the most severe open alert onto
+   * the KPI words instead (ALTA -> PARAR), which mixes the D8 alert
+   * vocabulary with the D10 KPI vocabulary and can disagree with the floor
+   * tablet once a KPI recovers while its alert is still open (D26).
+   */
+  estadoKpi: Severidad
+  /** H3: open alerts on the line, broken down by severity (D8 words via
+   * `SEVERIDAD_PALABRA`) -- shown next to the KPI chip so the facilitator
+   * still sees alert activity even though the chip itself is KPI-only. */
+  alertasPorSeveridad: AlertasPorSeveridad
   alertasAbiertas: number
   /** Epoch ms of the line's last "Simular turno", or null if never. */
   ultimaSimulacion: number | null

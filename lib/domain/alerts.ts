@@ -1,6 +1,21 @@
 import type { Alerta, Severidad } from "@/lib/mock-data"
 
-const SEVERITY_RANK: Record<Severidad, number> = { parar: 0, atencion: 1, ok: 2 }
+export const SEVERITY_RANK: Record<Severidad, number> = { parar: 0, atencion: 1, ok: 2 }
+
+/**
+ * H3: worst (most severe) value in a list of severities, "ok" when the list
+ * is empty. Shared by any "worst state across several things" computation
+ * (e.g. the back office's per-line KPI chip, which takes the worst of a
+ * line's fpy/dph/scrap states -- the same severity ordering alert sorting
+ * already uses above).
+ */
+export function peorSeveridad(severidades: readonly Severidad[]): Severidad {
+  let peor: Severidad = "ok"
+  for (const s of severidades) {
+    if (SEVERITY_RANK[s] < SEVERITY_RANK[peor]) peor = s
+  }
+  return peor
+}
 
 /**
  * Sorts alerts by severity rank (parar > atencion > ok), then by newest

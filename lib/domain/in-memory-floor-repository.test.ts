@@ -187,19 +187,39 @@ describe("InMemoryFloorRepository", () => {
       expect(estado.lineas.map((l) => l.nombre).sort()).toEqual([...LINEAS_DEMO_CONOCIDAS].sort())
     })
 
-    it("reports the active line's seeded alert count and worst severity", async () => {
+    it("H3: reports the active line's seeded alert count and worst KPI state", async () => {
       const estado = await repo.estadoDemo()
       const activa = estado.lineas.find((l) => l.nombre === LINEA_ACTIVA)!
       expect(activa.alertasAbiertas).toBeGreaterThan(0)
-      expect(activa.estado).toBe("parar") // ALERTAS_INICIALES includes two "parar" alerts
+      // Worst of Línea 3's seeded KPIs (fpy 88.4 -> parar), NOT the worst
+      // open alert's severity -- see LineaEstadoDemo#estadoKpi's doc.
+      expect(activa.estadoKpi).toBe("parar")
       expect(activa.ultimaSimulacion).toBeNull()
+    })
+
+    it("H3: breaks down the active line's open alerts by severity", async () => {
+      const estado = await repo.estadoDemo()
+      const activa = estado.lineas.find((l) => l.nombre === LINEA_ACTIVA)!
+      // ALERTAS_INICIALES: 2 parar, 3 atencion, 2 ok, all "nueva".
+      expect(activa.alertasPorSeveridad).toEqual({ parar: 2, atencion: 3, ok: 2 })
+      expect(
+        activa.alertasPorSeveridad.parar + activa.alertasPorSeveridad.atencion + activa.alertasPorSeveridad.ok,
+      ).toBe(activa.alertasAbiertas)
     })
 
     it("reports 0 open alerts and 'ok' for a line with no seeded alerts", async () => {
       const estado = await repo.estadoDemo()
       const otra = estado.lineas.find((l) => l.nombre !== LINEA_ACTIVA)!
       expect(otra.alertasAbiertas).toBe(0)
-      expect(otra.estado).toBe("ok")
+      expect(otra.estadoKpi).toBe("ok")
+      expect(otra.alertasPorSeveridad).toEqual({ parar: 0, atencion: 0, ok: 0 })
+    })
+
+    it("H3: a line's KPI state is its own (mirrors supabase/seed.sql per-line values, not Línea 3's)", async () => {
+      const estado = await repo.estadoDemo()
+      const linea2 = estado.lineas.find((l) => l.nombre === "Línea 2 · Pintura")!
+      // Línea 2 seed: fpy 90.1 (atencion band), dph 4.5 (atencion), scrap 2.4 (atencion).
+      expect(linea2.estadoKpi).toBe("atencion")
     })
 
     it("G3: escenarioActivo is null until a scenario is applied", async () => {
@@ -343,7 +363,7 @@ describe("InMemoryFloorRepository", () => {
       expect(estado.escenarioActivo).toBe("todo-ok")
       for (const linea of estado.lineas) {
         expect(linea.alertasAbiertas).toBe(0)
-        expect(linea.estado).toBe("ok")
+        expect(linea.estadoKpi).toBe("ok")
       }
     })
 
@@ -353,10 +373,10 @@ describe("InMemoryFloorRepository", () => {
       expect(estado.escenarioActivo).toBe("linea3-parar-alta")
       const l3 = estado.lineas.find((l) => l.nombre === LINEA_ACTIVA)!
       expect(l3.alertasAbiertas).toBe(1)
-      expect(l3.estado).toBe("parar")
+      expect(l3.estadoKpi).toBe("parar")
       for (const otra of estado.lineas.filter((l) => l.nombre !== LINEA_ACTIVA)) {
         expect(otra.alertasAbiertas).toBe(0)
-        expect(otra.estado).toBe("ok")
+        expect(otra.estadoKpi).toBe("ok")
       }
     })
 
@@ -366,7 +386,7 @@ describe("InMemoryFloorRepository", () => {
       expect(estado.escenarioActivo).toBe("muchas-media")
       const l3 = estado.lineas.find((l) => l.nombre === LINEA_ACTIVA)!
       expect(l3.alertasAbiertas).toBeGreaterThan(3)
-      expect(l3.estado).toBe("atencion")
+      expect(l3.estadoKpi).toBe("atencion")
     })
 
     it("'recuperacion': Línea 3's alerts are already resolved, KPIs recovered", async () => {
@@ -375,7 +395,7 @@ describe("InMemoryFloorRepository", () => {
       expect(estado.escenarioActivo).toBe("recuperacion")
       const l3 = estado.lineas.find((l) => l.nombre === LINEA_ACTIVA)!
       expect(l3.alertasAbiertas).toBe(0)
-      expect(l3.estado).toBe("ok")
+      expect(l3.estadoKpi).toBe("ok")
     })
 
     it("resets to seed before applying (a prior mutation does not leak into the scenario)", async () => {

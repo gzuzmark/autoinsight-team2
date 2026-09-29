@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ESTILOS } from "@/lib/status"
 import { ejecutarAccion } from "@/lib/backoffice/acciones"
+import { formatearResumenAlertas } from "@/lib/backoffice/resumen-alertas"
 import type { EscenarioId, EstadoDemo, LineaDemoConocida } from "@/lib/domain/floor-repository"
 import { ESCENARIOS } from "@/lib/domain/floor-repository"
 import { formatearHora, type Severidad } from "@/lib/mock-data"
@@ -257,9 +258,12 @@ function EstadoDemoCard({
         )}
         <ul className="flex flex-col gap-2">
           {estadoDemo.lineas.map((linea) => (
-            <li key={linea.nombre} className="flex items-center justify-between gap-2">
-              <span className="text-sm font-medium">{linea.nombre}</span>
-              <EstadoLineaChip estado={linea.estado} />
+            <li key={linea.nombre} className="flex flex-col gap-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium">{linea.nombre}</span>
+                <EstadoLineaChip estado={linea.estadoKpi} />
+              </div>
+              <p className="text-xs text-neutral-500">{formatearResumenAlertas(linea.alertasPorSeveridad)}</p>
             </li>
           ))}
         </ul>

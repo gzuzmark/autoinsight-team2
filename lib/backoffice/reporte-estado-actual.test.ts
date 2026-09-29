@@ -8,8 +8,8 @@ describe("construirReporteEstadoActual", () => {
     const reporte = construirReporteEstadoActual({
       fecha: FECHA,
       lineas: [
-        { nombre: "Línea 1 · Chasis", estado: "ok", alertasAbiertas: 0 },
-        { nombre: "Línea 3 · Motores", estado: "parar", alertasAbiertas: 3 },
+        { nombre: "Línea 1 · Chasis", estadoKpi: "ok", alertasAbiertas: 0 },
+        { nombre: "Línea 3 · Motores", estadoKpi: "parar", alertasAbiertas: 3 },
       ],
       appBaseUrl: "https://example.com",
     })

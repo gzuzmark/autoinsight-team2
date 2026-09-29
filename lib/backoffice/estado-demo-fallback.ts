@@ -31,7 +31,8 @@ function estadoDemoFallback(): EstadoDemo {
   return {
     lineas: LINEAS_DEMO_CONOCIDAS.map((nombre) => ({
       nombre,
-      estado: "ok" as const,
+      estadoKpi: "ok" as const,
+      alertasPorSeveridad: { parar: 0, atencion: 0, ok: 0 },
       alertasAbiertas: 0,
       ultimaSimulacion: null,
     })),

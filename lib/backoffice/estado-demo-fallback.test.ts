@@ -7,7 +7,8 @@ describe("resolverEstadoDemo (C4, RDD review G2)", () => {
     const real: EstadoDemo = {
       lineas: LINEAS_DEMO_CONOCIDAS.map((nombre) => ({
         nombre,
-        estado: "ok",
+        estadoKpi: "ok",
+        alertasPorSeveridad: { parar: 0, atencion: 0, ok: 0 },
         alertasAbiertas: 0,
         ultimaSimulacion: null,
       })),
@@ -29,6 +30,8 @@ describe("resolverEstadoDemo (C4, RDD review G2)", () => {
     // deliberately 0 here rather than an invented larger number.
     for (const linea of resultado.estadoDemo.lineas) {
       expect(linea.ultimaSimulacion).toBeNull()
+      expect(linea.estadoKpi).toBe("ok")
+      expect(linea.alertasPorSeveridad).toEqual({ parar: 0, atencion: 0, ok: 0 })
     }
   })
 })

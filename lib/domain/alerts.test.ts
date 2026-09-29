@@ -9,6 +9,7 @@ import {
   groupChangesByStation,
   mergeShiftAlerts,
   newSinceVisit,
+  peorSeveridad,
   sortAlerts,
 } from "./alerts"
 
@@ -357,6 +358,22 @@ describe("focusTargetAfterResolve", () => {
     const result = focusTargetAfterResolve(["only"], "only")
 
     expect(result).toEqual({ kind: "empty" })
+  })
+})
+
+describe("peorSeveridad (H3)", () => {
+  it("returns 'ok' for an empty list", () => {
+    expect(peorSeveridad([])).toBe("ok")
+  })
+
+  it("returns the most severe value regardless of input order", () => {
+    expect(peorSeveridad(["ok", "atencion", "ok"])).toBe("atencion")
+    expect(peorSeveridad(["atencion", "parar", "ok"])).toBe("parar")
+    expect(peorSeveridad(["parar", "parar"])).toBe("parar")
+  })
+
+  it("returns 'ok' when every value is 'ok'", () => {
+    expect(peorSeveridad(["ok", "ok", "ok"])).toBe("ok")
   })
 })
 

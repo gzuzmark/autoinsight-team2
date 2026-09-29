@@ -98,7 +98,8 @@ export class SupabaseFloorRepository implements FloorRepository {
         .filter((f): f is EstadoLineaRow & { nombre: LineaDemoConocida } => esLineaDemoConocida(f.nombre))
         .map((f) => ({
           nombre: f.nombre,
-          estado: f.estado,
+          estadoKpi: f.estado_kpi,
+          alertasPorSeveridad: { parar: f.alertas_alta, atencion: f.alertas_media, ok: f.alertas_baja },
           alertasAbiertas: f.alertas_abiertas,
           ultimaSimulacion: f.ultima_simulacion ? new Date(f.ultima_simulacion).getTime() : null,
         })),
@@ -243,8 +244,12 @@ export class SupabaseFloorRepository implements FloorRepository {
  * mirrors). */
 type EstadoLineaRow = {
   nombre: string
-  estado: Severidad
+  /** H3: worst KPI state of the line (see LineaEstadoDemo#estadoKpi's doc). */
+  estado_kpi: Severidad
   alertas_abiertas: number
+  alertas_alta: number
+  alertas_media: number
+  alertas_baja: number
   ultima_simulacion: string | null
 }
 

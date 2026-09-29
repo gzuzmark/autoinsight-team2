@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto"
-import { activeAlerts, attendAlert, dismissAlert } from "@/lib/domain/alerts"
+import { activeAlerts, attendAlert, dismissAlert, peorSeveridad } from "@/lib/domain/alerts"
 import { indicadorATablero } from "@/lib/domain/indicadores"
 import { simularTurnoLinea } from "@/lib/domain/simular-turno"
 import type { EscenarioId } from "@/lib/domain/escenarios"
 import { esEscenarioId } from "@/lib/domain/escenarios"
 import type {
+  AlertasPorSeveridad,
   EstadoDemo,
   FloorRepository,
   IndicadorTablero,
@@ -45,10 +46,35 @@ type LineaEstado = {
   ultimaSimulacion: number | null
 }
 
+// H3: baseline KPI values per known line, mirroring supabase/seed.sql's
+// `indicadores` insert exactly (parity so "Estado de la demo" computes the
+// same worst-KPI chip in mock mode as it does against Supabase). Before H3
+// every known line reused Línea 3's own INDICADORES verbatim, which only
+// worked by coincidence while the chip was alert-based (the other two known
+// lines simply had no seeded alerts) -- a KPI-based chip needs each line's
+// own values.
+const VALORES_BASE_POR_LINEA: Record<LineaDemoConocida, Record<string, number>> = {
+  "Línea 1 · Chasis": { fpy: 94.2, dph: 2, scrap: 0.9 },
+  "Línea 2 · Pintura": { fpy: 90.1, dph: 4.5, scrap: 2.4 },
+  "Línea 3 · Motores": { fpy: 88.4, dph: 5, scrap: 1.6 },
+}
+
+function indicadoresBase(nombre: LineaDemoConocida): Indicador[] {
+  const valores = VALORES_BASE_POR_LINEA[nombre]
+  return INDICADORES.map((i) => ({ ...i, valor: valores[i.id] ?? i.valor }))
+}
+
+/** H3: open-alert count per severity, for the back office's alert summary. */
+function contarPorSeveridad(alertas: readonly Alerta[]): AlertasPorSeveridad {
+  const counts: AlertasPorSeveridad = { parar: 0, atencion: 0, ok: 0 }
+  for (const a of alertas) counts[a.severidad]++
+  return counts
+}
+
 function estadoInicialLinea(nombre: LineaDemoConocida): LineaEstado {
   return {
     alertas: nombre === LINEA.nombre ? ordenarAlertas(ALERTAS_INICIALES.map((a) => ({ ...a }))) : [],
-    indicadoresState: INDICADORES.map((i) => ({ ...i })),
+    indicadoresState: indicadoresBase(nombre),
     ultimaSimulacion: null,
   }
 }
@@ -239,7 +265,11 @@ export class InMemoryFloorRepository implements FloorRepository {
         const activas = activeAlerts(estado.alertas)
         return {
           nombre,
-          estado: activas[0]?.severidad ?? "ok",
+          // H3: worst KPI state (same computation the floor tiles use),
+          // decoupled from the alerts' own severities -- see
+          // LineaEstadoDemo#estadoKpi's doc.
+          estadoKpi: peorSeveridad(estado.indicadoresState.map((i) => indicadorATablero(i).estado)),
+          alertasPorSeveridad: contarPorSeveridad(activas),
           alertasAbiertas: activas.length,
           ultimaSimulacion: estado.ultimaSimulacion,
         }
