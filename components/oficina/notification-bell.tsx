@@ -119,16 +119,26 @@ export function NotificationBell() {
     if (abierto) panelRef.current?.focus()
   }, [abierto])
 
+  // L-2 (RDD review K/push/G9/J follow-up, 2026-09-29): the capture used to
+  // live inside the setAbierto updater, so React re-invoking that updater
+  // (StrictMode/a replayed render) could fire `oficina_campana_abierta`
+  // more than once for a single click. It now reads the pre-toggle value
+  // directly (no updater involved) and fires the capture at most once per
+  // call, outside any setState updater -- same shape as K-1's
+  // descartarNuevasAlertasPoll fix in app-provider.tsx. The participant
+  // lookup's promise is settled with .catch so a rejection (offline,
+  // storage denied) never surfaces as an unhandled rejection; the bell
+  // itself never depends on this succeeding.
   function alternar() {
-    setAbierto((previo) => {
-      const proximo = !previo
-      if (proximo) {
-        obtenerIdParticipanteOficina().then((participante) => {
+    const abrira = !abierto
+    setAbierto(abrira)
+    if (abrira) {
+      obtenerIdParticipanteOficina()
+        .then((participante) => {
           capturarEvento(eventoOficinaCampanaAbierta({ participante, vista: "oficina" }))
         })
-      }
-      return proximo
-    })
+        .catch(() => {})
+    }
   }
 
   function alHacerClicNotificacion(notificacion: NotificacionAlerta) {
