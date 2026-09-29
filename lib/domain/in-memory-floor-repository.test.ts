@@ -367,6 +367,23 @@ describe("InMemoryFloorRepository", () => {
       }
     })
 
+    // RDD review E1/E2 + batch H (2026-09-29), F1: since H3 gave Línea 2 its
+    // own baseline KPIs (fpy 90.1, dph 4.5, scrap 2.4 -- all in the atencion
+    // band, see VALORES_BASE_POR_LINEA / supabase/seed.sql), the assertion
+    // above that "every KPI is ok" after 'todo-ok' would pass vacuously if
+    // 'todo-ok' happened to leave Línea 2 untouched (its own baseline is
+    // never 'ok' on its own). Pin the actual transition explicitly: Línea 2
+    // starts 'atencion' before any scenario runs, and 'todo-ok' overrides it
+    // to 'ok', not merely defaults it.
+    it("'todo-ok': Línea 2's own non-ok baseline is overridden by the scenario, not left alone", async () => {
+      const antes = await repo.estadoDemo()
+      expect(antes.lineas.find((l) => l.nombre === "Línea 2 · Pintura")!.estadoKpi).toBe("atencion")
+
+      await repo.aplicarEscenario("todo-ok")
+      const despues = await repo.estadoDemo()
+      expect(despues.lineas.find((l) => l.nombre === "Línea 2 · Pintura")!.estadoKpi).toBe("ok")
+    })
+
     it("'linea3-parar-alta': exactly one open ALTA (parar) alert on Línea 3, other lines ok", async () => {
       await repo.aplicarEscenario("linea3-parar-alta")
       const estado = await repo.estadoDemo()
