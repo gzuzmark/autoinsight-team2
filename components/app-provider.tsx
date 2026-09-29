@@ -10,6 +10,11 @@ import {
   registrarPoll,
   type EstadoNuevasAlertas,
 } from "@/lib/domain/nuevas-alertas-poll"
+import {
+  ESTADO_INICIAL_ULTIMA_ACTUALIZACION,
+  registrarPollExitoso,
+  type EstadoUltimaActualizacion,
+} from "@/lib/domain/ultima-actualizacion-poll"
 import type { IndicadorTablero, Linea, Planta, Tablero, UsuarioLogin } from "@/lib/domain/floor-repository"
 import type { Alerta } from "@/lib/mock-data"
 
@@ -27,6 +32,10 @@ type AppState = {
   totalNuevosDesdeVisita: number
   esPrimeraVisita: boolean
   ultimoLogoutTs: number | null
+  /** Batch I: epoch ms of the last SUCCESSFUL poll of /api/tablero this
+   * session (D6/D29 "Última actualización HH:MM"), null before the first
+   * one lands -- NOT Tablero#ultimaActualizacion (the DB's own last-data-
+   * change timestamp). */
   ultimaActualizacion: number | null
   /** Set only when a background refresh (resolve/simulate) fails; the
    * dashboard keeps showing the last good tablero underneath. */
@@ -52,6 +61,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [nuevasAlertasEstado, setNuevasAlertasEstado] = useState<EstadoNuevasAlertas>(
     ESTADO_INICIAL_NUEVAS_ALERTAS,
   )
+  // Batch I: same "every successful tablero fetch" centralization as
+  // nuevasAlertasEstado above, tracking when (not what) last landed --
+  // see lib/domain/ultima-actualizacion-poll.ts's doc for why this is the
+  // DB's `ultima_actualizacion`.
+  const [ultimaActualizacionEstado, setUltimaActualizacionEstado] = useState<EstadoUltimaActualizacion>(
+    ESTADO_INICIAL_ULTIMA_ACTUALIZACION,
+  )
 
   // G7a: every successful tablero fetch (login, poll tick, or a
   // resolve-triggered refresh) feeds the pure new-alerts-since-poll
@@ -60,6 +76,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const aplicarTablero = useCallback((t: Tablero) => {
     setTablero(t)
     setNuevasAlertasEstado((prev) => registrarPoll(prev, t.alertas))
+    setUltimaActualizacionEstado((prev) => registrarPollExitoso(prev, Date.now()))
   }, [])
 
   useEffect(() => {
@@ -100,6 +117,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // G7a: a new session (next login) must start with a clean baseline --
     // no leftover "new alerts" from the previous user's session.
     setNuevasAlertasEstado(ESTADO_INICIAL_NUEVAS_ALERTAS)
+    // Batch I (D29 "stops on logout"): the header itself disappears once
+    // tablero is null, but reset the timestamp too so a later session
+    // never renders a stale "Última actualización" from before this logout.
+    setUltimaActualizacionEstado(ESTADO_INICIAL_ULTIMA_ACTUALIZACION)
     void api.logout()
   }, [])
 
@@ -147,6 +168,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             setTablero(null)
             setTableroError(null)
             setNuevasAlertasEstado(ESTADO_INICIAL_NUEVAS_ALERTAS)
+            setUltimaActualizacionEstado(ESTADO_INICIAL_ULTIMA_ACTUALIZACION)
             return
           }
           // Any other failure keeps showing the last good tablero (no
@@ -185,7 +207,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     totalNuevosDesdeVisita: vista.totalNuevosDesdeVisita,
     esPrimeraVisita: vista.esPrimeraVisita,
     ultimoLogoutTs: vista.ultimoLogoutTs,
-    ultimaActualizacion: tablero?.ultimaActualizacion ?? null,
+    // Batch I: last SUCCESSFUL poll of /api/tablero, not the DB's own
+    // ultima_actualizacion (see lib/domain/ultima-actualizacion-poll.ts).
+    ultimaActualizacion: ultimaActualizacionEstado.ultimoPollExitoso,
     tableroError,
     nuevasAlertasPoll: [...nuevasAlertasEstado.pendientes],
     descartarNuevasAlertasPoll,
