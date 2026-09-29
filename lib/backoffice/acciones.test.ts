@@ -20,6 +20,15 @@ describe("ejecutarAccion", () => {
     expect(resultado).toEqual({ ok: true })
   })
 
+  it("G6: also resolves the parsed JSON body on a successful response, for callers that need it (e.g. correo status)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true, correo: "enviado" }), { status: 200 })),
+    )
+    const resultado = await ejecutarAccion("/api/backoffice/turno", { method: "POST" })
+    expect(resultado).toEqual({ ok: true, data: { ok: true, correo: "enviado" } })
+  })
+
   it("resolves with the server error message on a non-ok JSON response", async () => {
     vi.stubGlobal(
       "fetch",

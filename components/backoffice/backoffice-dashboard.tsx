@@ -20,7 +20,7 @@ import { COMUNICACIONES, GUION_PASOS, PARTICIPANTE_ACTUAL, PLANTA_NOMBRE, REGIST
 // Every other action button stays inert ("Disponible en G6/G7"/"Disponible
 // en G4"/"Disponible en G5") until its own task.
 
-const INERT_TITLE_COMUNICACIONES = "Disponible en G6/G7"
+const INERT_TITLE_COMUNICACIONES = "Disponible en G7 (Disparar push)"
 const INERT_TITLE_REGISTRO = "Disponible en G4"
 const INERT_TITLE_NOTAS = "Disponible en G5"
 
@@ -41,9 +41,14 @@ export function BackofficeDashboard({
   const [reiniciando, setReiniciando] = useState(false)
   const [mensajeReinicio, setMensajeReinicio] = useState<string | null>(null)
   const [lineaEnCurso, setLineaEnCurso] = useState<LineaDemoConocida | null>(null)
-  const [mensajeTurno, setMensajeTurno] = useState<{ linea: LineaDemoConocida; texto: string } | null>(null)
+  const [mensajeTurno, setMensajeTurno] = useState<
+    { linea: LineaDemoConocida; texto: string; esError: boolean } | null
+  >(null)
   const [escenarioEnCurso, setEscenarioEnCurso] = useState<EscenarioId | null>(null)
   const [mensajeEscenario, setMensajeEscenario] = useState<{ id: EscenarioId; texto: string } | null>(null)
+  const [cambiandoToggleCorreo, setCambiandoToggleCorreo] = useState(false)
+  const [enviandoCorreo, setEnviandoCorreo] = useState(false)
+  const [mensajeCorreo, setMensajeCorreo] = useState<{ texto: string; esError: boolean } | null>(null)
 
   async function onSalir() {
     if (saliendo) return
@@ -83,10 +88,46 @@ export function BackofficeDashboard({
     })
     setLineaEnCurso(null)
     if (resultado.ok) {
+      // G6: the route reports whether it also sent a shift-report email
+      // (correo: "enviado" | "omitido" | "error") -- shown inline here
+      // regardless, since the shift itself already succeeded either way.
+      const correo = (resultado.data as { correo?: string } | undefined)?.correo
+      if (correo === "enviado") {
+        setMensajeTurno({ linea, texto: "Turno simulado · reporte enviado", esError: false })
+      } else if (correo === "error") {
+        setMensajeTurno({ linea, texto: "Turno simulado · no se pudo enviar el reporte", esError: true })
+      }
       router.refresh()
       return
     }
-    setMensajeTurno({ linea, texto: resultado.error })
+    setMensajeTurno({ linea, texto: resultado.error, esError: true })
+  }
+
+  async function onCambiarToggleCorreo(valor: boolean) {
+    if (cambiandoToggleCorreo) return
+    setCambiandoToggleCorreo(true)
+    const resultado = await ejecutarAccion("/api/backoffice/configuracion", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ enviarReporteTurno: valor }),
+    })
+    setCambiandoToggleCorreo(false)
+    if (resultado.ok) {
+      router.refresh()
+      return
+    }
+    setMensajeCorreo({ texto: resultado.error, esError: true })
+  }
+
+  async function onEnviarCorreoAhora() {
+    if (enviandoCorreo) return
+    setEnviandoCorreo(true)
+    setMensajeCorreo(null)
+    const resultado = await ejecutarAccion("/api/backoffice/correo", { method: "POST" })
+    setEnviandoCorreo(false)
+    setMensajeCorreo(
+      resultado.ok ? { texto: "Correo enviado", esError: false } : { texto: resultado.error, esError: true },
+    )
   }
 
   async function onAplicarEscenario(id: EscenarioId) {
@@ -149,7 +190,14 @@ export function BackofficeDashboard({
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <ComunicacionesCard />
+        <ComunicacionesCard
+          enviarReporteTurno={estadoDemo.enviarReporteTurno}
+          cambiandoToggle={cambiandoToggleCorreo}
+          onCambiarToggle={onCambiarToggleCorreo}
+          enviandoCorreo={enviandoCorreo}
+          mensajeCorreo={mensajeCorreo}
+          onEnviarCorreoAhora={onEnviarCorreoAhora}
+        />
         <RegistroSesionCard />
       </div>
 
@@ -293,7 +341,7 @@ function CambiarTurnoCard({
 }: {
   estadoDemo: EstadoDemo
   lineaEnCurso: LineaDemoConocida | null
-  mensaje: { linea: LineaDemoConocida; texto: string } | null
+  mensaje: { linea: LineaDemoConocida; texto: string; esError: boolean } | null
   onSimularTurno: (linea: LineaDemoConocida) => void
 }) {
   return (
@@ -327,7 +375,10 @@ function CambiarTurnoCard({
               </Button>
             </div>
             {mensaje?.linea === linea.nombre && (
-              <p role="alert" className="text-xs font-medium text-destructive">
+              <p
+                role={mensaje.esError ? "alert" : "status"}
+                className={`text-xs font-medium ${mensaje.esError ? "text-destructive" : "text-emerald-700"}`}
+              >
                 {mensaje.texto}
               </p>
             )}
@@ -389,16 +440,64 @@ function EscenariosCard({
   )
 }
 
-function ComunicacionesCard() {
+function ComunicacionesCard({
+  enviarReporteTurno,
+  cambiandoToggle,
+  onCambiarToggle,
+  enviandoCorreo,
+  mensajeCorreo,
+  onEnviarCorreoAhora,
+}: {
+  enviarReporteTurno: boolean
+  cambiandoToggle: boolean
+  onCambiarToggle: (valor: boolean) => void
+  enviandoCorreo: boolean
+  mensajeCorreo: { texto: string; esError: boolean } | null
+  onEnviarCorreoAhora: () => void
+}) {
   return (
     <Card>
       <CardHeader>
         <CardTitle>Comunicaciones</CardTitle>
-        <CardDescription>Disponible cuando el envío esté listo</CardDescription>
+        <CardDescription>Reporte de turno por correo</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <p className="text-sm font-medium">Enviar reporte al simular turno</p>
+            <p className="text-xs text-neutral-500">Se envía tras cada "Simular turno" en la tarjeta de arriba.</p>
+          </div>
+          <Button
+            role="switch"
+            aria-checked={enviarReporteTurno}
+            variant={enviarReporteTurno ? "default" : "secondary"}
+            size="sm"
+            onClick={() => onCambiarToggle(!enviarReporteTurno)}
+            disabled={cambiandoToggle}
+          >
+            {enviarReporteTurno ? "Activado" : "Desactivado"}
+          </Button>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
+          <div className="flex flex-col gap-1">
+            <Button onClick={onEnviarCorreoAhora} disabled={enviandoCorreo}>
+              {enviandoCorreo ? "Enviando…" : "Enviar correo ahora"}
+            </Button>
+            <p className="text-xs text-neutral-500">Reporte de estado actual de las 3 líneas.</p>
+          </div>
+        </div>
+        {mensajeCorreo && (
+          <p
+            role={mensajeCorreo.esError ? "alert" : "status"}
+            className={`text-xs font-medium ${mensajeCorreo.esError ? "text-destructive" : "text-emerald-700"}`}
+          >
+            {mensajeCorreo.texto}
+          </p>
+        )}
+
         {COMUNICACIONES.map((accion) => (
-          <div key={accion.id} className="flex items-center justify-between gap-3">
+          <div key={accion.id} className="flex items-center justify-between gap-3 border-t border-border pt-3">
             <div className="flex flex-col gap-1">
               <Button
                 disabled

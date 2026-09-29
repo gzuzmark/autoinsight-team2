@@ -791,6 +791,30 @@ async function runBackofficeScenario(browser, allViolations) {
     console.log("backoffice escenarios: OK")
     await checkOverflow("after escenario")
 
+    // G6: flip the "Enviar reporte al simular turno" toggle and send one
+    // "Enviar correo ahora" -- both hit real routes (LogEmailSender when
+    // GMAIL_USER/GMAIL_APP_PASSWORD are unset, which is this script's
+    // normal environment) and must complete with no inline error.
+    const toggleCorreo = page.getByRole("switch", { name: /Activado|Desactivado/ })
+    const estadoInicial = await toggleCorreo.textContent()
+    const estadoOpuesto = estadoInicial?.includes("Activado") ? "Desactivado" : "Activado"
+    await toggleCorreo.click()
+    await page.getByRole("switch", { name: estadoOpuesto }).waitFor({ state: "visible", timeout: 10_000 })
+    // Restore it: leave the demo in the same state this scenario found it.
+    await page.getByRole("switch", { name: estadoOpuesto }).click()
+    await page.getByRole("switch", { name: estadoInicial ?? "" }).waitFor({ state: "visible", timeout: 10_000 })
+    console.log("backoffice comunicaciones toggle: OK")
+
+    await page.getByRole("button", { name: "Enviar correo ahora" }).click()
+    await page.getByText(/Correo enviado|No se pudo/).waitFor({ state: "visible", timeout: 10_000 })
+    const correoOk = await page.getByText("Correo enviado").count()
+    if (correoOk === 0) {
+      allViolations.push("\n== backoffice / enviar correo ahora ==")
+      allViolations.push("  - 'Enviar correo ahora' did not report success")
+    }
+    console.log("backoffice enviar correo ahora: OK")
+    await checkOverflow("after comunicaciones")
+
     await page.getByRole("button", { name: "Salir" }).click()
     await page.getByLabel("Clave de facilitador").waitFor({ state: "visible" })
     const dashboardAfterLogout = await page.getByText("Estado de la demo").count()

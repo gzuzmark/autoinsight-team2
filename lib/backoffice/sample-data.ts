@@ -16,10 +16,15 @@ export const PARTICIPANTE_ACTUAL = "P3"
 // lib/domain/escenarios.ts, shared with the Supabase migration/route --
 // "Escenarios" wires to it directly in backoffice-dashboard.tsx.
 
+// G6: "Enviar correo ahora" and the "Enviar reporte al simular turno"
+// toggle are wired to live data/routes directly in
+// backoffice-dashboard.tsx (EstadoDemo#enviarReporteTurno,
+// POST /api/backoffice/correo, POST /api/backoffice/configuracion) --
+// only "Disparar push" (G7b) stays inert here.
+
 export type ComunicacionAccion = { id: string; etiqueta: string; detalle: string }
 
 export const COMUNICACIONES: ComunicacionAccion[] = [
-  { id: "correo", etiqueta: "Enviar correo ahora", detalle: "Destinatario: calidad@planta-norte.com" },
   { id: "push", etiqueta: "Disparar push", detalle: "Destino: Oficina · severidad ALTA" },
 ]
 

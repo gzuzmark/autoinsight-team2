@@ -1,6 +1,6 @@
 "use client"
 
-export type ResultadoAccion = { ok: true } | { ok: false; error: string }
+export type ResultadoAccion = { ok: true; data?: unknown } | { ok: false; error: string }
 
 const ERROR_GENERICO = "No se pudo completar la acción."
 
@@ -16,7 +16,16 @@ const ERROR_GENERICO = "No se pudo completar la acción."
 export async function ejecutarAccion(input: string, init: RequestInit): Promise<ResultadoAccion> {
   try {
     const res = await fetch(input, init)
-    if (res.ok) return { ok: true }
+    if (res.ok) {
+      // G6: some callers (e.g. "Simular turno") need the response body
+      // (correo status) -- a 204/empty body parses to null, so this stays
+      // `{ ok: true }` (no `data` key at all) for every caller that doesn't.
+      const data = await res
+        .clone()
+        .json()
+        .catch(() => null)
+      return data === null ? { ok: true } : { ok: true, data }
+    }
 
     const body = await res
       .clone()
