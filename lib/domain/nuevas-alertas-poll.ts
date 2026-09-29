@@ -54,3 +54,27 @@ export function descartarPendientes(estado: EstadoNuevasAlertas): EstadoNuevasAl
   if (estado.pendientes.length === 0) return estado
   return { ...estado, pendientes: [] }
 }
+
+/**
+ * K-1 fix: pure decision for dismissing the current pending batch, kept
+ * OUTSIDE any `setState` updater. `descartarNuevasAlertasPoll`
+ * (components/app-provider.tsx) previously called `capturarEvento` from
+ * inside a `setNuevasAlertasEstado` updater function -- React may invoke an
+ * updater more than once (StrictMode double-invoke, a replayed render), so
+ * the `nuevas_alertas_vistas` analytics event could be sent twice for a
+ * single dismissal.
+ *
+ * The caller now calls this once (a plain function call, never an updater),
+ * gets back the cleared state AND the count to capture (or `null` when
+ * there is nothing to report -- an empty batch, or no identified
+ * participant yet), and fires `capturarEvento` itself exactly once before
+ * calling `setNuevasAlertasEstado(resultado.estado)` with the plain value
+ * form (not the updater form) so React cannot re-invoke this decision.
+ */
+export function procesarDescarteNuevasAlertas(
+  estado: EstadoNuevasAlertas,
+  participanteId: string | null,
+): { estado: EstadoNuevasAlertas; cantidad: number | null } {
+  const cantidad = estado.pendientes.length > 0 && participanteId !== null ? estado.pendientes.length : null
+  return { estado: descartarPendientes(estado), cantidad }
+}

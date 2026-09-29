@@ -5,8 +5,8 @@ import { api, ApiError, type LoginResult } from "@/lib/api/client"
 import { createPoller } from "@/lib/api/poller"
 import { derivarVista } from "@/lib/domain/tablero-view"
 import {
-  descartarPendientes,
   ESTADO_INICIAL_NUEVAS_ALERTAS,
+  procesarDescarteNuevasAlertas,
   registrarPoll,
   type EstadoNuevasAlertas,
 } from "@/lib/domain/nuevas-alertas-poll"
@@ -90,6 +90,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // below. Reset on logout (salir) so a new session starts clean.
   const timingRef = useRef<EstadoTimingAlertas>(ESTADO_INICIAL_TIMING)
   const participanteIdRef = useRef<string | null>(null)
+  // K-1: mirrors nuevasAlertasEstado so descartarNuevasAlertasPoll (a
+  // useCallback with a stable [] dep list) can read the latest pending
+  // batch without a stale closure -- kept in sync every render, read only
+  // from the event handler below, never during render.
+  const nuevasAlertasEstadoRef = useRef<EstadoNuevasAlertas>(ESTADO_INICIAL_NUEVAS_ALERTAS)
+  nuevasAlertasEstadoRef.current = nuevasAlertasEstado
 
   // G7a: every successful tablero fetch (login, poll tick, or a
   // resolve-triggered refresh) feeds the pure new-alerts-since-poll
@@ -228,21 +234,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     )
   }, [])
 
+  // K-1: the decision (procesarDescarteNuevasAlertas) runs once as a plain
+  // function call, and capturarEvento is fired here -- outside any setState
+  // updater -- so React cannot invoke this side effect more than once for
+  // a single dismissal (StrictMode/a replayed render only re-invokes
+  // updater functions, not this callback body).
   const descartarNuevasAlertasPoll = useCallback(() => {
-    setNuevasAlertasEstado((prev) => {
-      // G8: capture BEFORE clearing -- prev.pendientes is what is about to
-      // be discarded, an empty dismissal is a no-op event that would tell
-      // the facilitator nothing.
-      if (prev.pendientes.length > 0 && participanteIdRef.current) {
-        capturarEvento(
-          eventoNuevasAlertasVistas(
-            { participante: participanteIdRef.current, vista: "planta" },
-            { cantidad: prev.pendientes.length },
-          ),
-        )
-      }
-      return descartarPendientes(prev)
-    })
+    const { estado: nuevoEstado, cantidad } = procesarDescarteNuevasAlertas(
+      nuevasAlertasEstadoRef.current,
+      participanteIdRef.current,
+    )
+    if (cantidad !== null && participanteIdRef.current) {
+      capturarEvento(
+        eventoNuevasAlertasVistas({ participante: participanteIdRef.current, vista: "planta" }, { cantidad }),
+      )
+    }
+    setNuevasAlertasEstado(nuevoEstado)
   }, [])
 
   // D29/E4: auto-refresh the tablero every 15s while logged in and the page

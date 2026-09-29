@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   descartarPendientes,
   ESTADO_INICIAL_NUEVAS_ALERTAS,
+  procesarDescarteNuevasAlertas,
   registrarPoll,
   type EstadoNuevasAlertas,
 } from "@/lib/domain/nuevas-alertas-poll"
@@ -61,5 +62,39 @@ describe("descartarPendientes", () => {
   it("is a no-op on an already-empty batch", () => {
     const estado: EstadoNuevasAlertas = { vistos: new Set(["a"]), pendientes: [] }
     expect(descartarPendientes(estado)).toBe(estado)
+  })
+})
+
+describe("procesarDescarteNuevasAlertas (K-1: pure decision, called exactly once by the caller)", () => {
+  it("returns the cleared state and the pending count to capture when there is a participant and pending alerts", () => {
+    let estado = registrarPoll(ESTADO_INICIAL_NUEVAS_ALERTAS, [alerta("a")])
+    estado = registrarPoll(estado, [alerta("a"), alerta("b", 100)])
+    const resultado = procesarDescarteNuevasAlertas(estado, "P3")
+    expect(resultado.cantidad).toBe(1)
+    expect(resultado.estado.pendientes).toEqual([])
+  })
+
+  it("returns cantidad null (no capture) when there is no identified participant yet", () => {
+    let estado = registrarPoll(ESTADO_INICIAL_NUEVAS_ALERTAS, [alerta("a")])
+    estado = registrarPoll(estado, [alerta("a"), alerta("b", 100)])
+    const resultado = procesarDescarteNuevasAlertas(estado, null)
+    expect(resultado.cantidad).toBeNull()
+    expect(resultado.estado.pendientes).toEqual([])
+  })
+
+  it("returns cantidad null (no-op capture) when the batch is already empty", () => {
+    const estado: EstadoNuevasAlertas = { vistos: new Set(["a"]), pendientes: [] }
+    const resultado = procesarDescarteNuevasAlertas(estado, "P3")
+    expect(resultado.cantidad).toBeNull()
+    expect(resultado.estado).toBe(estado)
+  })
+
+  it("is a pure function: calling it twice with the same input never changes the reported cantidad (proves a caller invoking it more than once, e.g. React StrictMode re-running a handler, cannot double-count)", () => {
+    let estado = registrarPoll(ESTADO_INICIAL_NUEVAS_ALERTAS, [alerta("a")])
+    estado = registrarPoll(estado, [alerta("a"), alerta("b", 100)])
+    const primera = procesarDescarteNuevasAlertas(estado, "P3")
+    const segunda = procesarDescarteNuevasAlertas(estado, "P3")
+    expect(primera.cantidad).toBe(segunda.cantidad)
+    expect(primera.cantidad).toBe(1)
   })
 })
