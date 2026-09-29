@@ -11,6 +11,7 @@ import type {
   FloorRepository,
   IndicadorTablero,
   LineaDemoConocida,
+  NotificacionAlerta,
   ReporteTurnoDatos,
   Resolucion,
   Tablero,
@@ -21,6 +22,7 @@ import {
   esLineaDemoConocida,
   InvalidInputError,
   LINEAS_DEMO_CONOCIDAS,
+  NOTIFICACIONES_LIMITE,
   SessionInvalidError,
 } from "@/lib/domain/floor-repository"
 import {
@@ -431,6 +433,26 @@ export class InMemoryFloorRepository implements FloorRepository {
       }
     }
     return mejor
+  }
+
+  async alertasAltaRecientes(): Promise<NotificacionAlerta[]> {
+    const todas: NotificacionAlerta[] = []
+    for (const nombre of LINEAS_DEMO_CONOCIDAS) {
+      const estado = this.lineasEstado.get(nombre)!
+      for (const alerta of estado.alertas) {
+        if (alerta.severidad !== "parar") continue
+        todas.push({
+          id: alerta.id,
+          titulo: alerta.titulo,
+          severidad: alerta.severidad,
+          linea: nombre,
+          estacion: alerta.estacion,
+          creadaEn: alerta.timestamp,
+        })
+      }
+    }
+    todas.sort((a, b) => b.creadaEn - a.creadaEn)
+    return todas.slice(0, NOTIFICACIONES_LIMITE)
   }
 
   private lineaActiva(): LineaEstado {

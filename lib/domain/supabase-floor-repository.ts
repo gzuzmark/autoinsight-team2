@@ -8,6 +8,7 @@ import type {
   FloorRepository,
   IndicadorTablero,
   LineaDemoConocida,
+  NotificacionAlerta,
   ReporteTurnoDatos,
   Resolucion,
   Tablero,
@@ -20,6 +21,7 @@ import {
   esEscenarioId,
   esLineaDemoConocida,
   InvalidInputError,
+  NOTIFICACIONES_LIMITE,
   SessionInvalidError,
 } from "@/lib/domain/floor-repository"
 import type { Database } from "@/lib/supabase/database.types"
@@ -298,6 +300,39 @@ export class SupabaseFloorRepository implements FloorRepository {
         estado: "nueva",
       },
     }
+  }
+
+  async alertasAltaRecientes(): Promise<NotificacionAlerta[]> {
+    // G9: same direct-table-read approach as obtenerAlerta/alertaAltaMasReciente
+    // above -- the service-role client already bypasses RLS, and this is a
+    // read-only query, so no SECURITY DEFINER RPC is needed. "Open or
+    // recent" (decided 2026-09-29): no `.eq("estado", "nueva")` filter,
+    // unlike alertaAltaMasReciente -- an ALTA alert already resolved still
+    // shows up here so the bell reflects what actually happened, not just
+    // what is still open.
+    const { data, error } = await this.client
+      .from("alertas")
+      .select("id,severidad,titulo,creada_en,lineas(nombre),estaciones(nombre)")
+      .eq("severidad", "parar")
+      .order("creada_en", { ascending: false })
+      .limit(NOTIFICACIONES_LIMITE)
+    if (error) throw this.mapError(error)
+    const rows = (data ?? []) as unknown as {
+      id: string
+      severidad: Severidad
+      titulo: string
+      creada_en: string
+      lineas: { nombre: string } | null
+      estaciones: { nombre: string } | null
+    }[]
+    return rows.map((row) => ({
+      id: row.id,
+      titulo: row.titulo,
+      severidad: row.severidad,
+      linea: row.lineas?.nombre ?? "",
+      estacion: row.estaciones?.nombre ?? null,
+      creadaEn: new Date(row.creada_en).getTime(),
+    }))
   }
 
   private mapTablero(row: TableroRow, participante: number): Tablero {

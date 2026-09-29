@@ -197,6 +197,26 @@ export type AlertaDetalle = {
   resueltaEn: number | null
 }
 
+/** G9: office notification bell -- both adapters cap `alertasAltaRecientes()`
+ * at this many entries (decided 2026-09-29: "last 20", not a time window --
+ * a facilitator session never produces anywhere near this many ALTA alerts,
+ * so the cap only guards against an unbounded query, not real trimming). */
+export const NOTIFICACIONES_LIMITE = 20
+
+/** G9: office notification bell -- one recent ALTA alert entry. Only the
+ * fields the office already shows elsewhere (O-D4: no session/auth on
+ * /oficina); read/unread state is tracked per browser in localStorage
+ * (lib/oficina/notificaciones.ts), never here. */
+export type NotificacionAlerta = {
+  id: string
+  titulo: string
+  severidad: Severidad
+  linea: string
+  estacion: string | null
+  /** Epoch ms the alert was created. */
+  creadaEn: number
+}
+
 /** No/expired/invalid session (maps from Postgres errcode 28000). */
 export class SessionInvalidError extends Error {
   constructor(message = "Invalid session.") {
@@ -295,4 +315,14 @@ export interface FloorRepository {
    * as `reiniciarDemo()`) and advances the participant counter, returning
    * its new value. */
   nuevoParticipante(): Promise<number>
+
+  /** G9: office notification bell -- the most recent ALTA alerts across
+   * every known line, newest first, capped at 20 (see
+   * `lib/domain/floor-repository.ts`'s `NOTIFICACIONES_LIMITE`). Includes
+   * an ALTA alert regardless of whether it is still open or already
+   * resolved ("open or recent", decided 2026-09-29): a facilitator/manager
+   * reviewing the bell right after a participant dismissed a critical
+   * alert should still see it happened. Never requires a floor session,
+   * same as `alertaAltaMasReciente`. */
+  alertasAltaRecientes(): Promise<NotificacionAlerta[]>
 }

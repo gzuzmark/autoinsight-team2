@@ -161,6 +161,22 @@ describe.skipIf(!canRun)("SupabaseFloorRepository (integration, local stack)", (
     await repo.reiniciarDemo()
   })
 
+  it("G9: alertasAltaRecientes finds a real open ALTA alert, newest first, and keeps it after it is resolved", async () => {
+    await repo.aplicarEscenario("linea3-parar-alta")
+    const abiertas = await repo.alertasAltaRecientes()
+    expect(abiertas.length).toBeGreaterThan(0)
+    expect(abiertas[0].severidad).toBe("parar")
+    expect(abiertas[0].linea).toBe("Línea 3 · Motores")
+
+    const sessionId = await repo.iniciarSesion(ANA_ID, ANA_PIN)
+    await repo.resolverAlerta(sessionId!, abiertas[0].id, "atendida")
+    await repo.cerrarSesion(sessionId!)
+
+    const tras = await repo.alertasAltaRecientes()
+    expect(tras.some((a) => a.id === abiertas[0].id)).toBe(true)
+    await repo.reiniciarDemo()
+  })
+
   it("G8: nuevoParticipante advances the counter over a real PostgREST round-trip, reflected in estadoDemo/tablero", async () => {
     const antes = (await repo.estadoDemo()).participanteActual!
     try {

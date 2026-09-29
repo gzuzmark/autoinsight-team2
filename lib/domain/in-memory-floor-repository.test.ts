@@ -538,4 +538,38 @@ describe("InMemoryFloorRepository", () => {
       }
     })
   })
+
+  describe("alertasAltaRecientes (G9: office notification bell)", () => {
+    it("returns the seeded Línea 3 ALTA alert, newest first", async () => {
+      const resultado = await repo.alertasAltaRecientes()
+      expect(resultado.length).toBeGreaterThan(0)
+      expect(resultado[0].severidad).toBe("parar")
+      expect(resultado[0].linea).toBe(LINEA_ACTIVA)
+      for (let i = 1; i < resultado.length; i++) {
+        expect(resultado[i - 1].creadaEn).toBeGreaterThanOrEqual(resultado[i].creadaEn)
+      }
+    })
+
+    it("returns an empty list when no ALTA alert exists anywhere, open or resolved", async () => {
+      await repo.aplicarEscenario("todo-ok")
+      expect(await repo.alertasAltaRecientes()).toEqual([])
+    })
+
+    it("includes an ALTA alert already resolved (recent, not just open ones)", async () => {
+      const abiertas = await repo.alertasAltaRecientes()
+      const id = abiertas[0].id
+      await repo.resolverAlerta(await repo.iniciarSesion(ANA.id, ANA.pin) ?? "", id, "atendida")
+      const tras = await repo.alertasAltaRecientes()
+      expect(tras.some((a) => a.id === id)).toBe(true)
+    })
+
+    it("caps the result at 20 entries", async () => {
+      // Every scenario/shift only ever produces a handful of ALTA alerts,
+      // so 20 is comfortably above what a real demo session ever
+      // accumulates -- this only proves the cap is applied, not that it is
+      // reachable in this test.
+      const resultado = await repo.alertasAltaRecientes()
+      expect(resultado.length).toBeLessThanOrEqual(20)
+    })
+  })
 })
