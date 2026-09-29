@@ -10,6 +10,7 @@ import { IndicatorsRow } from "./indicators-row"
 import { AlertStack } from "./alert-stack"
 import { AlertDetail } from "./alert-detail"
 import { SinceLastVisit } from "./since-last-visit"
+import { NewAlertsPollStrip } from "./new-alerts-poll-strip"
 
 export function Dashboard() {
   const {
@@ -27,6 +28,8 @@ export function Dashboard() {
     ultimoLogoutTs,
     ultimaActualizacion,
     tableroError,
+    nuevasAlertasPoll,
+    descartarNuevasAlertasPoll,
   } = useApp()
 
   // Dashboard only renders once AppProvider has a usuario (see Shell in
@@ -157,6 +160,8 @@ export function Dashboard() {
           totalNuevos={totalNuevosDesdeVisita}
           ultimoLogoutTs={ultimoLogoutTs}
         />
+
+        <NewAlertsPollStrip alertas={nuevasAlertasPoll} onDescartar={descartarNuevasAlertasPoll} />
 
         {tableroError && (
           <div className="flex shrink-0 items-center rounded-2xl border-4 border-neutral-900 bg-white px-5 py-2">

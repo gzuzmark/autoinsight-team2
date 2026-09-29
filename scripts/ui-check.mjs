@@ -109,6 +109,7 @@ async function main() {
     await runOfficeNavigationScenario(browser, allViolations)
     await runOfficeDarkModeScenario(browser, allViolations)
     await runBackofficeScenario(browser, allViolations)
+    await runNewAlertsPollStripScenario(browser, allViolations)
     await runAutoRefreshScenario(browser, allViolations)
   } finally {
     await browser.close()
@@ -807,6 +808,102 @@ async function runBackofficeScenario(browser, allViolations) {
     allViolations.push(`\n== backoffice ==`)
     allViolations.push(`  - ${err.message}`)
     console.log("backoffice: FAILED")
+  } finally {
+    await page.close()
+  }
+}
+
+// G7a: trigger a shift through the back-office API (mock mode has no
+// external DB call to use, unlike E4 below) while a floor page is already
+// open and logged in, and assert the "N alertas nuevas · HH:MM" inline
+// strip appears within one 15s poll window (D29), is dismissible, and
+// leaves the kiosk layout scroll-free. Skipped with a clear notice when
+// BACKOFFICE_KEY is unset, same guard as runBackofficeScenario.
+//
+// Uses its own synthetic x-forwarded-for (a third bucket, distinct from
+// UI_CHECK_RESET_IP and from a real Playwright-driven browser request) so
+// this back-office login does not compete for the shared per-IP login
+// throttle budget the floor/office/backoffice scenarios above already
+// spend most of.
+const UI_CHECK_NEW_ALERTS_IP = "127.0.0.3"
+
+async function runNewAlertsPollStripScenario(browser, allViolations) {
+  console.log("\n--- new alerts poll strip (G7a) ---")
+  const key = process.env.BACKOFFICE_KEY
+  if (!key) {
+    console.log("new alerts poll strip: SKIPPED (BACKOFFICE_KEY not set in this script's environment)")
+    return
+  }
+
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
+  // Own synthetic x-forwarded-for on every request THIS page makes
+  // (including its floor login, D21's per-IP login throttle key): by this
+  // point in the run, the shared "unknown-client" bucket every earlier
+  // browser-driven login used (no XFF header) is likely near/at its 10
+  // attempts/60s cap -- a fresh Ana Ríos login here must not risk a 429.
+  await page.setExtraHTTPHeaders({ "x-forwarded-for": UI_CHECK_NEW_ALERTS_IP })
+  try {
+    await page.goto(`${BASE_URL}/planta`, { waitUntil: "networkidle" })
+    await page.getByRole("button", { name: /Ana Ríos/ }).click()
+    await page.getByText("Ingresa tu PIN").waitFor({ state: "visible" })
+    for (const d of "1234") await page.getByRole("button", { name: d, exact: true }).click()
+    await page.getByRole("button", { name: "Salir" }).waitFor({ state: "visible" })
+
+    // The strip must NOT be present right after login: this first tablero
+    // fetch is the session's baseline poll (D9's since-last-visit strip
+    // covers "what's new since login", not this one).
+    const beforeCount = await page.getByTestId("new-alerts-poll-strip").count()
+    if (beforeCount > 0) {
+      allViolations.push("\n== new alerts poll strip / first load ==")
+      allViolations.push("  - strip shown on the very first tablero fetch after login (should only learn the baseline)")
+    }
+
+    const loginRes = await fetch(`${BASE_URL}/api/backoffice/sesion`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-forwarded-for": UI_CHECK_NEW_ALERTS_IP },
+      body: JSON.stringify({ clave: key }),
+    })
+    const cookie = loginRes.headers.get("set-cookie")?.split(";")[0]
+    if (loginRes.status !== 204 || !cookie) {
+      allViolations.push("\n== new alerts poll strip ==")
+      allViolations.push(`  - back-office login failed with ${loginRes.status}; could not trigger a shift`)
+      return
+    }
+    const turnoRes = await fetch(`${BASE_URL}/api/backoffice/turno`, {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie, "x-forwarded-for": UI_CHECK_NEW_ALERTS_IP },
+      body: JSON.stringify({ linea: "Línea 3 · Motores" }),
+    })
+    await fetch(`${BASE_URL}/api/backoffice/sesion`, {
+      method: "DELETE",
+      headers: { cookie, "x-forwarded-for": UI_CHECK_NEW_ALERTS_IP },
+    })
+    if (!turnoRes.ok) {
+      allViolations.push("\n== new alerts poll strip ==")
+      allViolations.push(`  - POST /api/backoffice/turno failed with ${turnoRes.status}; could not trigger a shift`)
+      return
+    }
+
+    // Up to 20s: the 15s poll interval plus margin for a possibly-cold route.
+    await page.getByTestId("new-alerts-poll-strip").waitFor({ state: "visible", timeout: 20_000 })
+    console.log("new alerts poll strip: OK (appeared within 20s of a back-office-triggered shift)")
+
+    const overflow = await page.evaluate(() => {
+      const docEl = document.documentElement
+      return docEl.scrollWidth > docEl.clientWidth + 1 || docEl.scrollHeight > docEl.clientHeight + 1
+    })
+    if (overflow) {
+      allViolations.push("\n== new alerts poll strip / kiosk layout ==")
+      allViolations.push("  - kiosk (1280x800) scrolls or overflows horizontally with the strip shown")
+    }
+
+    await page.getByRole("button", { name: "Entendido" }).click()
+    await page.getByTestId("new-alerts-poll-strip").waitFor({ state: "hidden" })
+    console.log("new alerts poll strip: OK (dismissible via Entendido)")
+  } catch (err) {
+    allViolations.push(`\n== new alerts poll strip (G7a) ==`)
+    allViolations.push(`  - ${err.message}`)
+    console.log("new alerts poll strip: FAILED")
   } finally {
     await page.close()
   }
