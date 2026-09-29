@@ -9,6 +9,7 @@ import {
   extraerMensajeError,
   mensajeErrorActivar,
   mensajeErrorDesactivar,
+  mensajeErrorServiceWorker,
 } from "@/lib/oficina/push-toggle-logic"
 import { eventoPushCambiado } from "@/lib/analytics/events"
 import { capturarEvento } from "@/lib/analytics/posthog-client"
@@ -97,7 +98,21 @@ export function PushToggle() {
         setEstado("error")
         return
       }
-      const registro = await navigator.serviceWorker.register("/sw.js")
+      // Push fix (a): wait for BOTH register() to resolve AND
+      // navigator.serviceWorker.ready before subscribing -- register()
+      // alone can resolve to a registration whose worker is still
+      // installing/activating (observed in Zen: subscribe() then failed
+      // silently, no server request at all). `ready`'s registration is the
+      // one guaranteed to have an active worker.
+      let registro: ServiceWorkerRegistration
+      try {
+        await navigator.serviceWorker.register("/sw.js")
+        registro = await navigator.serviceWorker.ready
+      } catch {
+        setEstado("error")
+        setMensajeError(mensajeErrorServiceWorker())
+        return
+      }
       suscripcion = await registro.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(clavePublica),

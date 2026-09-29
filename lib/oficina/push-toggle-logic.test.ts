@@ -4,6 +4,7 @@ import {
   extraerMensajeError,
   mensajeErrorActivar,
   mensajeErrorDesactivar,
+  mensajeErrorServiceWorker,
 } from "@/lib/oficina/push-toggle-logic"
 
 describe("mensajeErrorActivar", () => {
@@ -43,6 +44,14 @@ describe("estadoTrasResincronizar", () => {
       estado: "error",
       mensaje: "No se pudo sincronizar la suscripción con el servidor.",
     })
+  })
+})
+
+describe("mensajeErrorServiceWorker (push fix a: register()/ready failed before subscribe could even run)", () => {
+  it("is a clear, distinct message -- never the generic server-error wording", () => {
+    const mensaje = mensajeErrorServiceWorker()
+    expect(mensaje).toContain("No se pudo activar")
+    expect(mensaje).not.toBe(mensajeErrorActivar(500, null))
   })
 })
 

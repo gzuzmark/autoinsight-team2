@@ -28,6 +28,18 @@ export function mensajeErrorActivar(status: number, errorServidor: string | null
   return `No se pudo activar: ${errorServidor ?? ERROR_SERVIDOR_GENERICO}`
 }
 
+/** Push fix (a, 2026-09-29 "small push fixes" note): message for when the
+ * service worker itself never became ready -- `register()` rejected, or
+ * `navigator.serviceWorker.ready` never resolved to an active worker --
+ * BEFORE `pushManager.subscribe()` could even run. Observed once in Zen: a
+ * click on "Activar notificaciones" did nothing and the server never saw a
+ * request. Deliberately distinct from mensajeErrorActivar's wording (that
+ * one is for a real server response); this one means subscribe never had a
+ * chance to run at all. */
+export function mensajeErrorServiceWorker(): string {
+  return "No se pudo activar: el navegador no pudo preparar las notificaciones. Probá de nuevo."
+}
+
 /** Message for a failed DELETE /api/oficina/push/suscripcion during
  * "Desactivar". The browser subscription is unsubscribed locally
  * regardless (see the component) -- this only decides the surfaced

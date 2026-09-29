@@ -9,7 +9,7 @@
 
 export type PayloadNotificacion = { title?: string; body?: string; tag?: string; url?: string }
 
-export type OpcionesNotificacion = { body: string; tag: string; data: { url: string } }
+export type OpcionesNotificacion = { body: string; tag: string; renotify: boolean; data: { url: string } }
 
 const TITULO_POR_DEFECTO = "AutoInsight"
 const URL_POR_DEFECTO = "/oficina"
@@ -24,6 +24,14 @@ export function payloadANotificacion(payload: PayloadNotificacion): { titulo: st
     opciones: {
       body: payload.body || "",
       tag: payload.tag || TITULO_POR_DEFECTO,
+      // Push fix (b, 2026-09-29 "small push fixes" note): without
+      // `renotify`, the Notifications API silently REPLACES an existing
+      // notification that shares the same `tag` -- no sound/vibration/
+      // visual re-alert -- so a second ALTA push for an alert that is
+      // still open (same tag) went unnoticed. `renotify` only has any
+      // effect when paired with a `tag` (always set above, defaulted or
+      // not), so this is always true.
+      renotify: true,
       data: { url: payload.url || URL_POR_DEFECTO },
     },
   }

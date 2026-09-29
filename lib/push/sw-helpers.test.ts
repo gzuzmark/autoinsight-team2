@@ -13,6 +13,7 @@ describe("payloadANotificacion", () => {
     expect(opciones).toEqual({
       body: "Torque fuera de rango",
       tag: "alerta-1",
+      renotify: true,
       data: { url: "/oficina/alertas/1" },
     })
   })
@@ -22,6 +23,14 @@ describe("payloadANotificacion", () => {
     expect(titulo).toBe("AutoInsight")
     expect(opciones.body).toBe("")
     expect(opciones.data.url).toBe("/oficina")
+  })
+
+  it("push fix (b): renotify is always true so a repeat push for the same alert (same tag) re-alerts the user instead of silently replacing the notification", () => {
+    const primero = payloadANotificacion({ tag: "alerta-1" })
+    const repetido = payloadANotificacion({ tag: "alerta-1" })
+    expect(primero.opciones.renotify).toBe(true)
+    expect(repetido.opciones.renotify).toBe(true)
+    expect(primero.opciones.tag).toBe(repetido.opciones.tag)
   })
 })
 

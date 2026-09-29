@@ -21,6 +21,11 @@ self.addEventListener("push", (event) => {
   const opciones = {
     body: payload.body || "",
     tag: payload.tag || TITULO_POR_DEFECTO,
+    // Push fix (b): without renotify, a same-tag repeat push (e.g. the
+    // same alert triggering again) silently replaces the previous
+    // notification with no new alert to the user. Mirrors
+    // lib/push/sw-helpers.ts#payloadANotificacion verbatim.
+    renotify: true,
     data: { url: payload.url || URL_POR_DEFECTO },
   }
 
