@@ -289,6 +289,9 @@ export class InMemoryFloorRepository implements FloorRepository {
       nuevasAlertas: resultado.agregadas,
       indicadores: resultado.indicadoresState.map(indicadorATablero),
       alertasAbiertas: activeAlerts(resultado.alertas).length,
+      // E1: mock mode derives report data from the same in-memory state it
+      // just wrote above -- it cannot fail independently of the shift itself.
+      datosDisponibles: true,
     }
   }
 

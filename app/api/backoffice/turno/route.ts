@@ -64,6 +64,11 @@ async function enviarReporteSiCorresponde(
   try {
     const estado = await repo.estadoDemo()
     if (!estado.enviarReporteTurno) return "omitido"
+    // E1: the shift committed, but the report-enrichment reads failed
+    // (SupabaseFloorRepository degrades instead of throwing -- see
+    // ReporteTurnoDatos#datosDisponibles's doc) -- there is nothing
+    // meaningful to send.
+    if (!reporte.datosDisponibles) return "error"
 
     const email = construirReporteTurno({
       linea: reporte.linea,

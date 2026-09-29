@@ -128,45 +128,60 @@ export class SupabaseFloorRepository implements FloorRepository {
     const { data, error } = await this.client.rpc("demo_simular_turno_linea", { p_linea: linea, p_cantidad: 2 })
     if (error) throw this.mapError(error)
 
+    const nuevasAlertas: Alerta[] = (data ?? []).map((a) => ({
+      id: a.id,
+      severidad: a.severidad,
+      titulo: a.titulo,
+      estacion: "",
+      timestamp: new Date(a.creada_en).getTime(),
+      estado: "nueva" as const,
+    }))
+
     // G6: `demo_simular_turno_linea` already returns the newly-generated
     // alerts (`setof public.alertas`, see the migration) -- no separate
     // diff needed. KPI states after the shift and the still-open count come
     // from two more reads, done here rather than adding yet another RPC:
     // `public.indicadores` (unlike private.demo_configuracion) IS a public-
     // schema table, reachable directly with the service-role client.
-    const { data: lineaRow, error: lineaError } = await this.client
-      .from("lineas")
-      .select("id")
-      .eq("nombre", linea)
-      .single()
-    if (lineaError) throw this.mapError(lineaError)
+    //
+    // E1 (RDD review hotfix follow-up): the RPC above already committed the
+    // shift -- it happened, for real, before this point. These enrichment
+    // reads only build the shift-report email; a failure here must degrade
+    // (`datosDisponibles: false`, empty/zeroed report fields) instead of
+    // throwing, or a shift that succeeded would turn into a 500 for the
+    // caller (see ReporteTurnoDatos#datosDisponibles's doc and POST
+    // /api/backoffice/turno's own "the shift already happened" contract).
+    try {
+      const { data: lineaRow, error: lineaError } = await this.client
+        .from("lineas")
+        .select("id")
+        .eq("nombre", linea)
+        .single()
+      if (lineaError) throw this.mapError(lineaError)
 
-    const [{ data: indicadoresRows, error: indicadoresError }, { count: alertasAbiertas, error: countError }] =
-      await Promise.all([
-        this.client.from("indicadores").select("clave,nombre,detalle,estado").eq("linea_id", lineaRow.id),
-        this.client
-          .from("alertas")
-          .select("id", { count: "exact", head: true })
-          .eq("linea_id", lineaRow.id)
-          .eq("estado", "nueva"),
-      ])
-    if (indicadoresError) throw this.mapError(indicadoresError)
-    if (countError) throw this.mapError(countError)
+      const [{ data: indicadoresRows, error: indicadoresError }, { count: alertasAbiertas, error: countError }] =
+        await Promise.all([
+          this.client.from("indicadores").select("clave,nombre,detalle,estado").eq("linea_id", lineaRow.id),
+          this.client
+            .from("alertas")
+            .select("id", { count: "exact", head: true })
+            .eq("linea_id", lineaRow.id)
+            .eq("estado", "nueva"),
+        ])
+      if (indicadoresError) throw this.mapError(indicadoresError)
+      if (countError) throw this.mapError(countError)
 
-    return {
-      linea,
-      nuevasAlertas: (data ?? []).map((a): Alerta => ({
-        id: a.id,
-        severidad: a.severidad,
-        titulo: a.titulo,
-        estacion: "",
-        timestamp: new Date(a.creada_en).getTime(),
-        estado: "nueva",
-      })),
-      indicadores: (indicadoresRows ?? []).map(
-        (i): IndicadorTablero => ({ id: i.clave, nombre: i.nombre, detalle: i.detalle, estado: i.estado }),
-      ),
-      alertasAbiertas: alertasAbiertas ?? 0,
+      return {
+        linea,
+        nuevasAlertas,
+        indicadores: (indicadoresRows ?? []).map(
+          (i): IndicadorTablero => ({ id: i.clave, nombre: i.nombre, detalle: i.detalle, estado: i.estado }),
+        ),
+        alertasAbiertas: alertasAbiertas ?? 0,
+        datosDisponibles: true,
+      }
+    } catch {
+      return { linea, nuevasAlertas, indicadores: [], alertasAbiertas: 0, datosDisponibles: false }
     }
   }
 

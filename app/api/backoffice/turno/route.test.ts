@@ -117,5 +117,27 @@ describe("POST /api/backoffice/turno", () => {
       expect(res.status).toBe(200)
       expect(body).toEqual({ ok: true, correo: "error" })
     })
+
+    it("E1: returns 200 with correo: 'error' when report data is unavailable after a committed shift", async () => {
+      vi.stubEnv("BACKOFFICE_KEY", "dev-facilitador")
+      const token = currentToken()!
+      // Simulates SupabaseFloorRepository's degraded path (post-RPC reads
+      // failed): the shift itself already happened -- simularTurno resolves,
+      // it never throws -- but the report data it returns is marked
+      // unavailable.
+      vi.spyOn(repo, "simularTurno").mockImplementation(async (linea) => ({
+        linea,
+        nuevasAlertas: [],
+        indicadores: [],
+        alertasAbiertas: 0,
+        datosDisponibles: false,
+      }))
+
+      const res = await POST(req({ linea: "Línea 3 · Motores" }, token))
+      const body = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(body).toEqual({ ok: true, correo: "error" })
+    })
   })
 })
