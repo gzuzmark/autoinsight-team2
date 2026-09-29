@@ -47,23 +47,28 @@ insert into public.estaciones (linea_id, numero, nombre) values
   ('00000000-0000-0000-0000-000000000011', 2, 'Soldadura'),
   ('00000000-0000-0000-0000-000000000012', 1, 'Cabina de pintura');
 
--- Users: same names/iniciales/colors/PINs as lib/mock-data.ts. Five on
--- Línea 3 (where the seeded alerts/KPIs live), one on Línea 1.
+-- Users: same names/iniciales/colors as lib/mock-data.ts. Five on Línea 3
+-- (where the seeded alerts/KPIs live), one on Línea 1, one on Línea 2 (H1:
+-- Línea 2 previously had no demo user, so alerts generated there by
+-- "Simular turno" were never visible on any floor tablet). H2: every demo
+-- user shares PIN 1234 (one PIN for the facilitator to remember).
 insert into public.usuarios (id, linea_id, nombre, iniciales, color) values
   ('00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000013', 'Ana Ríos', 'AR', '#2563eb'),
   ('00000000-0000-0000-0000-000000000102', '00000000-0000-0000-0000-000000000013', 'Beto Cruz', 'BC', '#7c3aed'),
   ('00000000-0000-0000-0000-000000000103', '00000000-0000-0000-0000-000000000013', 'Caro Díaz', 'CD', '#0891b2'),
   ('00000000-0000-0000-0000-000000000104', '00000000-0000-0000-0000-000000000013', 'Diego Mora', 'DM', '#c026d3'),
   ('00000000-0000-0000-0000-000000000105', '00000000-0000-0000-0000-000000000013', 'Eli Vega', 'EV', '#ea580c'),
-  ('00000000-0000-0000-0000-000000000106', '00000000-0000-0000-0000-000000000011', 'Fer Luna', 'FL', '#0d9488');
+  ('00000000-0000-0000-0000-000000000106', '00000000-0000-0000-0000-000000000011', 'Fer Luna', 'FL', '#0d9488'),
+  ('00000000-0000-0000-0000-000000000107', '00000000-0000-0000-0000-000000000012', 'Gabi Paz', 'GP', '#65a30d');
 
 insert into public.usuarios_pin (usuario_id, pin_hash) values
   ('00000000-0000-0000-0000-000000000101', extensions.crypt('1234', extensions.gen_salt('bf'))),
-  ('00000000-0000-0000-0000-000000000102', extensions.crypt('2468', extensions.gen_salt('bf'))),
-  ('00000000-0000-0000-0000-000000000103', extensions.crypt('1357', extensions.gen_salt('bf'))),
-  ('00000000-0000-0000-0000-000000000104', extensions.crypt('9753', extensions.gen_salt('bf'))),
-  ('00000000-0000-0000-0000-000000000105', extensions.crypt('4321', extensions.gen_salt('bf'))),
-  ('00000000-0000-0000-0000-000000000106', extensions.crypt('8642', extensions.gen_salt('bf')));
+  ('00000000-0000-0000-0000-000000000102', extensions.crypt('1234', extensions.gen_salt('bf'))),
+  ('00000000-0000-0000-0000-000000000103', extensions.crypt('1234', extensions.gen_salt('bf'))),
+  ('00000000-0000-0000-0000-000000000104', extensions.crypt('1234', extensions.gen_salt('bf'))),
+  ('00000000-0000-0000-0000-000000000105', extensions.crypt('1234', extensions.gen_salt('bf'))),
+  ('00000000-0000-0000-0000-000000000106', extensions.crypt('1234', extensions.gen_salt('bf'))),
+  ('00000000-0000-0000-0000-000000000107', extensions.crypt('1234', extensions.gen_salt('bf')));
 
 -- KPIs per line (D24). `estado` is a GENERATED column derived from
 -- valor/mayor_es_mejor/umbral_atencion/umbral_parar (see migration

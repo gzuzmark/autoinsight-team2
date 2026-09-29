@@ -43,13 +43,21 @@ const min = (m: number) => AHORA - m * 60_000
 
 export const PLANTA_NOMBRE = "Planta Norte"
 
+// H2: every demo user shares PIN 1234 -- one PIN for the facilitator to
+// remember while walking a guerrilla-testing participant through login,
+// instead of a different PIN per avatar. Mock users carry no `linea` field
+// (see the D19 note in floor-repository.ts): `iniciarSesion` only checks
+// id+pin here, so this list never needs to track which line a user is "on".
 export const USUARIOS: Usuario[] = [
   { id: "u1", nombre: "Ana Ríos", pin: "1234", iniciales: "AR", color: "#2563eb" },
-  { id: "u2", nombre: "Beto Cruz", pin: "2468", iniciales: "BC", color: "#7c3aed" },
-  { id: "u3", nombre: "Caro Díaz", pin: "1357", iniciales: "CD", color: "#0891b2" },
-  { id: "u4", nombre: "Diego Mora", pin: "9753", iniciales: "DM", color: "#c026d3" },
-  { id: "u5", nombre: "Eli Vega", pin: "4321", iniciales: "EV", color: "#ea580c" },
-  { id: "u6", nombre: "Fer Luna", pin: "8642", iniciales: "FL", color: "#0d9488" },
+  { id: "u2", nombre: "Beto Cruz", pin: "1234", iniciales: "BC", color: "#7c3aed" },
+  { id: "u3", nombre: "Caro Díaz", pin: "1234", iniciales: "CD", color: "#0891b2" },
+  { id: "u4", nombre: "Diego Mora", pin: "1234", iniciales: "DM", color: "#c026d3" },
+  { id: "u5", nombre: "Eli Vega", pin: "1234", iniciales: "EV", color: "#ea580c" },
+  { id: "u6", nombre: "Fer Luna", pin: "1234", iniciales: "FL", color: "#0d9488" },
+  // H1: Línea 2 previously had no demo user, so alerts generated there by
+  // "Simular turno" were never visible on any floor tablet.
+  { id: "u7", nombre: "Gabi Paz", pin: "1234", iniciales: "GP", color: "#65a30d" },
 ]
 
 // Thresholds match supabase/seed.sql's Línea 3 indicadores exactly (D24/D25):

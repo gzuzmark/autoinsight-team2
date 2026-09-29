@@ -45,6 +45,18 @@ describe("InMemoryFloorRepository", () => {
       const sessionId = await repo.iniciarSesion("does-not-exist", "1234")
       expect(sessionId).toBeNull()
     })
+
+    it("H2: PIN 1234 now also logs in a user that previously had a different PIN", async () => {
+      const beto = USUARIOS.find((u) => u.nombre === "Beto Cruz")!
+      const sessionId = await repo.iniciarSesion(beto.id, "1234")
+      expect(sessionId).toEqual(expect.any(String))
+    })
+
+    it("H1: the new Línea 2 demo user (Gabi Paz) can log in with PIN 1234", async () => {
+      const gabi = USUARIOS.find((u) => u.nombre === "Gabi Paz")!
+      const sessionId = await repo.iniciarSesion(gabi.id, "1234")
+      expect(sessionId).toEqual(expect.any(String))
+    })
   })
 
   describe("cerrarSesion", () => {

@@ -1,10 +1,14 @@
 -- Seed parity tests (H7): asserts supabase/seed.sql matches lib/mock-data.ts
--- (planta, lineas, the 6 mock users incl. PIN, and Línea 3's KPI values and
+-- (planta, lineas, the 7 mock users incl. PIN, and Línea 3's KPI values and
 -- states) so the two never silently drift apart. Runs against the database
 -- `supabase db reset` just seeded; read-only (rollback at the end undoes
 -- nothing since this file makes no writes).
+--
+-- H1+H2: 7 users now (Gabi Paz added on Línea 2), and every seeded PIN is
+-- 1234 (previously a different PIN per user) -- see
+-- supabase/migrations/20260929000025_demo_users_same_pin.sql.
 begin;
-select plan(23);
+select plan(26);
 
 select is(
   (select count(*)::int from public.plantas),
@@ -28,12 +32,13 @@ select is(
 );
 select is(
   (select count(*)::int from public.usuarios),
-  6,
-  'exactly the 6 mock users are seeded'
+  7,
+  'exactly the 7 mock users are seeded (H1: Gabi Paz on Línea 2)'
 );
 
 -- Each user's nombre/iniciales/color matches lib/mock-data.ts USUARIOS, and
--- the stored bcrypt hash verifies against that user's mock PIN.
+-- the stored bcrypt hash verifies against PIN 1234 (H2: every demo user
+-- shares the same PIN).
 select is(
   (select (nombre, iniciales, color)::text from public.usuarios where id = '00000000-0000-0000-0000-000000000101'),
   '("Ana Ríos",AR,#2563eb)',
@@ -50,8 +55,8 @@ select is(
   'Beto Cruz matches lib/mock-data.ts'
 );
 select ok(
-  (select pin_hash = extensions.crypt('2468', pin_hash) from public.usuarios_pin where usuario_id = '00000000-0000-0000-0000-000000000102'),
-  'Beto Cruz'' seeded PIN hash verifies against 2468'
+  (select pin_hash = extensions.crypt('1234', pin_hash) from public.usuarios_pin where usuario_id = '00000000-0000-0000-0000-000000000102'),
+  'Beto Cruz'' seeded PIN hash verifies against 1234'
 );
 
 select is(
@@ -60,8 +65,8 @@ select is(
   'Caro Díaz matches lib/mock-data.ts'
 );
 select ok(
-  (select pin_hash = extensions.crypt('1357', pin_hash) from public.usuarios_pin where usuario_id = '00000000-0000-0000-0000-000000000103'),
-  'Caro Díaz'' seeded PIN hash verifies against 1357'
+  (select pin_hash = extensions.crypt('1234', pin_hash) from public.usuarios_pin where usuario_id = '00000000-0000-0000-0000-000000000103'),
+  'Caro Díaz'' seeded PIN hash verifies against 1234'
 );
 
 select is(
@@ -70,8 +75,8 @@ select is(
   'Diego Mora matches lib/mock-data.ts'
 );
 select ok(
-  (select pin_hash = extensions.crypt('9753', pin_hash) from public.usuarios_pin where usuario_id = '00000000-0000-0000-0000-000000000104'),
-  'Diego Mora'' seeded PIN hash verifies against 9753'
+  (select pin_hash = extensions.crypt('1234', pin_hash) from public.usuarios_pin where usuario_id = '00000000-0000-0000-0000-000000000104'),
+  'Diego Mora'' seeded PIN hash verifies against 1234'
 );
 
 select is(
@@ -80,8 +85,8 @@ select is(
   'Eli Vega matches lib/mock-data.ts'
 );
 select ok(
-  (select pin_hash = extensions.crypt('4321', pin_hash) from public.usuarios_pin where usuario_id = '00000000-0000-0000-0000-000000000105'),
-  'Eli Vega'' seeded PIN hash verifies against 4321'
+  (select pin_hash = extensions.crypt('1234', pin_hash) from public.usuarios_pin where usuario_id = '00000000-0000-0000-0000-000000000105'),
+  'Eli Vega'' seeded PIN hash verifies against 1234'
 );
 
 select is(
@@ -90,8 +95,24 @@ select is(
   'Fer Luna matches lib/mock-data.ts'
 );
 select ok(
-  (select pin_hash = extensions.crypt('8642', pin_hash) from public.usuarios_pin where usuario_id = '00000000-0000-0000-0000-000000000106'),
-  'Fer Luna'' seeded PIN hash verifies against 8642'
+  (select pin_hash = extensions.crypt('1234', pin_hash) from public.usuarios_pin where usuario_id = '00000000-0000-0000-0000-000000000106'),
+  'Fer Luna'' seeded PIN hash verifies against 1234'
+);
+
+-- H1: Gabi Paz, the new Línea 2 demo user.
+select is(
+  (select (nombre, iniciales, color)::text from public.usuarios where id = '00000000-0000-0000-0000-000000000107'),
+  '("Gabi Paz",GP,#65a30d)',
+  'Gabi Paz matches lib/mock-data.ts'
+);
+select is(
+  (select linea_id from public.usuarios where id = '00000000-0000-0000-0000-000000000107'),
+  '00000000-0000-0000-0000-000000000012'::uuid,
+  'Gabi Paz is seeded on Línea 2 · Pintura'
+);
+select ok(
+  (select pin_hash = extensions.crypt('1234', pin_hash) from public.usuarios_pin where usuario_id = '00000000-0000-0000-0000-000000000107'),
+  'Gabi Paz'' seeded PIN hash verifies against 1234'
 );
 
 -- Línea 3's KPIs match lib/mock-data.ts INDICADORES exactly. J5(e): compare
