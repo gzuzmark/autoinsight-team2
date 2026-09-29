@@ -10,6 +10,7 @@ import { EightDPanel } from "@/components/oficina/eight-d-panel"
 import { getAlertaPorId, VARIANTE_POR_GRAVEDAD, type AlertaOficina } from "@/lib/oficina/mock-data"
 import { alertaDetalleAOficina } from "@/lib/oficina/alerta-real"
 import { getFloorRepository } from "@/lib/floor-repository"
+import { CapturaAperturaAlerta } from "@/components/oficina/captura-apertura-alerta"
 
 // Screen 02 (Investigación de alerta, O3). G7b: a real alert id (from the
 // floor repository -- Supabase in prod, InMemory in mock mode) is preferred
@@ -19,13 +20,21 @@ import { getFloorRepository } from "@/lib/floor-repository"
 //
 // Next 16 passes route params as a Promise (breaking change vs. earlier
 // versions) -- see node_modules/next/dist/docs/01-app/01-getting-started/03-layouts-and-pages.md.
-export default async function AlertaPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function AlertaPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ origen?: string }>
+}) {
   const { id } = await params
+  const { origen } = await searchParams
   const alerta = await resolverAlerta(id)
   if (!alerta) notFound()
 
   return (
     <OfficeShell pathname="/oficina/alertas" title="Investigación de alerta" subtitle={`Alertas › ${alerta.linea} › ${alerta.titulo}`}>
+      <CapturaAperturaAlerta alertaId={alerta.id} origenPush={origen === "push"} />
       <div className="flex flex-col gap-4">
         <p className="text-sm text-muted-foreground">
           <Link href="/oficina" className="hover:underline">

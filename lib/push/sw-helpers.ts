@@ -39,3 +39,14 @@ export function urlDeNotificacion(data: unknown): string {
   }
   return URL_POR_DEFECTO
 }
+
+/** G8: `notificationclick`'s "focus an already-open tab" check compares
+ * against `client.url`, which never carries the `?origen=push` query flag
+ * (construirPayloadAlerta, lib/push/payload.ts) unless that exact tab was
+ * itself opened from a push click -- stripping the query before comparing
+ * keeps an already-open "plain" tab on the same alert matchable, while the
+ * notification is still opened/focused with the flag intact (openWindow
+ * uses the full url, unstripped -- only the match check uses this). */
+export function rutaParaCoincidenciaCliente(url: string): string {
+  return url.split("?")[0]
+}

@@ -10,6 +10,18 @@ import {
   mensajeErrorActivar,
   mensajeErrorDesactivar,
 } from "@/lib/oficina/push-toggle-logic"
+import { eventoPushCambiado } from "@/lib/analytics/events"
+import { capturarEvento } from "@/lib/analytics/posthog-client"
+import { obtenerIdParticipanteOficina } from "@/lib/oficina/participante-cliente"
+
+// G8: fires push_activado/push_desactivado only on a real state change the
+// user caused (never on the on-load re-sync, which can also land on
+// "activadas" without any click -- see the useEffect below).
+function capturarCambioPush(activo: boolean) {
+  obtenerIdParticipanteOficina().then((participante) => {
+    capturarEvento(eventoPushCambiado({ participante, vista: "oficina" }, activo))
+  })
+}
 
 /**
  * G7b: office "Activar notificaciones" button (D-less -- no auth on
@@ -98,6 +110,7 @@ export function PushToggle() {
       })
       if (res.ok) {
         setEstado("activadas")
+        capturarCambioPush(true)
         return
       }
       // I-3: the server does not have this subscription -- unsubscribe the
@@ -138,6 +151,7 @@ export function PushToggle() {
           const cuerpo = await res.json().catch(() => null)
           setMensajeError(mensajeErrorDesactivar(extraerMensajeError(cuerpo)))
         }
+        capturarCambioPush(false)
       }
       setEstado("inactivo")
     } catch {

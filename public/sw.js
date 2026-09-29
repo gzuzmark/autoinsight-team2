@@ -36,10 +36,19 @@ self.addEventListener("notificationclick", (event) => {
       ? data.url
       : URL_POR_DEFECTO
 
+  // G8: `url` may carry a `?origen=push` query flag (construirPayloadAlerta,
+  // lib/push/payload.ts) that an already-open "plain" tab on the same alert
+  // never has in its own address -- strip it before the match check only
+  // (mirrors lib/push/sw-helpers.ts#rutaParaCoincidenciaCliente verbatim);
+  // openWindow below still uses the full, unstripped url so the flag
+  // reaches the page for its notificacion_click/oficina_alerta_abierta
+  // capture.
+  const rutaParaCoincidencia = url.split("?")[0]
+
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
-        if (client.url.includes(url) && "focus" in client) {
+        if (client.url.includes(rutaParaCoincidencia) && "focus" in client) {
           return client.focus()
         }
       }

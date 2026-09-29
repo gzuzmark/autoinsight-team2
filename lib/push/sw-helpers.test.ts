@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { payloadANotificacion, urlDeNotificacion } from "@/lib/push/sw-helpers"
+import { payloadANotificacion, rutaParaCoincidenciaCliente, urlDeNotificacion } from "@/lib/push/sw-helpers"
 
 describe("payloadANotificacion", () => {
   it("maps a well-formed payload to a title and notification options", () => {
@@ -36,5 +36,15 @@ describe("urlDeNotificacion", () => {
     expect(urlDeNotificacion({})).toBe("/oficina")
     expect(urlDeNotificacion({ url: 123 })).toBe("/oficina")
     expect(urlDeNotificacion("not an object")).toBe("/oficina")
+  })
+})
+
+describe("rutaParaCoincidenciaCliente (G8: ?origen=push must not break client-matching)", () => {
+  it("strips a query string so an already-open tab still matches", () => {
+    expect(rutaParaCoincidenciaCliente("/oficina/alertas/a1?origen=push")).toBe("/oficina/alertas/a1")
+  })
+
+  it("a url with no query string is unchanged", () => {
+    expect(rutaParaCoincidenciaCliente("/oficina/alertas/a1")).toBe("/oficina/alertas/a1")
   })
 })

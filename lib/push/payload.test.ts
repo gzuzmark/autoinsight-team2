@@ -32,8 +32,8 @@ describe("construirPayloadAlerta", () => {
     expect(payload.tag).toBe("alerta-a1")
   })
 
-  it("url points at the office investigation screen for that alert", () => {
+  it("url points at the office investigation screen for that alert, flagged as a push origin (G8 notificacion_click)", () => {
     const payload = construirPayloadAlerta("Línea 3 · Motores", ALERTA)
-    expect(payload.url).toBe("/oficina/alertas/a1")
+    expect(payload.url).toBe("/oficina/alertas/a1?origen=push")
   })
 })
