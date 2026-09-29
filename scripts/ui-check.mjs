@@ -428,6 +428,11 @@ async function runScenariosAtViewport(browser, viewport, allViolations) {
 // still follows the floor rules (O-D1), checked the same way the floor
 // scenario checks `/planta`.
 const SAMPLE_ALERT_ID = "torque-fuera-de-rango-l3-e7"
+// G7b: a real (mock-mode InMemoryFloorRepository) seeded alert id --
+// lib/mock-data.ts's ALERTAS_INICIALES -- so the investigation screen's
+// real-data path (obtenerAlerta) is exercised too, not just the static
+// sample above.
+const REAL_ALERT_ID = "a1"
 
 function officePageChecks(page, name, allViolations) {
   async function checkOverflow(label) {
@@ -518,9 +523,22 @@ async function runOfficeScenariosAtViewport(browser, viewport, allViolations) {
     await page.getByRole("heading", { name: "Resumen de planta" }).waitFor({ state: "visible" })
     await checkOverflow("oficina resumen")
 
+    // G7b: the office header's "Activar notificaciones" button is present
+    // at every viewport (whatever its resolved state -- no-soportado in a
+    // headless browser without a real push-capable profile is an
+    // acceptable resolved state here; the point is it renders with no
+    // console error, not that it becomes "activadas").
+    await page.getByTestId("push-toggle").waitFor({ state: "visible" })
+
     await page.goto(`${BASE_URL}/oficina/alertas/${SAMPLE_ALERT_ID}`, { waitUntil: "networkidle" })
     await page.getByRole("heading", { name: "Investigación de alerta" }).waitFor({ state: "visible" })
     await checkOverflow("oficina alerta")
+
+    // G7b: a real alert id (mock-mode FloorRepository#obtenerAlerta) also
+    // renders the investigation screen, not just the static sample above.
+    await page.goto(`${BASE_URL}/oficina/alertas/${REAL_ALERT_ID}`, { waitUntil: "networkidle" })
+    await page.getByRole("heading", { name: "Investigación de alerta" }).waitFor({ state: "visible" })
+    await checkOverflow("oficina alerta real")
 
     await page.goto(`${BASE_URL}/oficina/reportes`, { waitUntil: "networkidle" })
     await page.getByText("Programar reporte", { exact: true }).waitFor({ state: "visible" })

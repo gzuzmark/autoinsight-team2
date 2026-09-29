@@ -19,14 +19,9 @@ export const PARTICIPANTE_ACTUAL = "P3"
 // G6: "Enviar correo ahora" and the "Enviar reporte al simular turno"
 // toggle are wired to live data/routes directly in
 // backoffice-dashboard.tsx (EstadoDemo#enviarReporteTurno,
-// POST /api/backoffice/correo, POST /api/backoffice/configuracion) --
-// only "Disparar push" (G7b) stays inert here.
-
-export type ComunicacionAccion = { id: string; etiqueta: string; detalle: string }
-
-export const COMUNICACIONES: ComunicacionAccion[] = [
-  { id: "push", etiqueta: "Disparar push", detalle: "Destino: Oficina · severidad ALTA" },
-]
+// POST /api/backoffice/correo, POST /api/backoffice/configuracion).
+// G7b: "Disparar push" is wired too (POST /api/backoffice/push) -- no more
+// inert Comunicaciones actions remain.
 
 export type EventoSesion = {
   hora: string

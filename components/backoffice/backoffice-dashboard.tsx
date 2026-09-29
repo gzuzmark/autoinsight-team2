@@ -13,16 +13,15 @@ import { formatearResumenAlertas } from "@/lib/backoffice/resumen-alertas"
 import type { EscenarioId, EstadoDemo, IndicadorEstadoDemo, LineaDemoConocida } from "@/lib/domain/floor-repository"
 import { ESCENARIOS } from "@/lib/domain/floor-repository"
 import { formatearHora, type Severidad } from "@/lib/mock-data"
-import { COMUNICACIONES, GUION_PASOS, PARTICIPANTE_ACTUAL, PLANTA_NOMBRE, REGISTRO_SESION } from "@/lib/backoffice/sample-data"
+import { GUION_PASOS, PARTICIPANTE_ACTUAL, PLANTA_NOMBRE, REGISTRO_SESION } from "@/lib/backoffice/sample-data"
 
 // G1: static back-office layout (odd/tasks/assets/shot-backoffice.png).
 // G2: "Estado de la demo" and "Cambiar turno" read/act on live
 // FloorRepository data (see app/backoffice/page.tsx).
-// G3: "Escenarios" does too.
-// Every other action button stays inert ("Disponible en G6/G7"/"Disponible
-// en G4"/"Disponible en G5") until its own task.
+// G3: "Escenarios" does too. G6/G7b: "Comunicaciones" does too.
+// Every other action button stays inert ("Disponible en G4"/"Disponible en
+// G5") until its own task.
 
-const INERT_TITLE_COMUNICACIONES = "Disponible en G7 (Disparar push)"
 const INERT_TITLE_REGISTRO = "Disponible en G4"
 const INERT_TITLE_NOTAS = "Disponible en G5"
 
@@ -51,6 +50,8 @@ export function BackofficeDashboard({
   const [cambiandoToggleCorreo, setCambiandoToggleCorreo] = useState(false)
   const [enviandoCorreo, setEnviandoCorreo] = useState(false)
   const [mensajeCorreo, setMensajeCorreo] = useState<{ texto: string; esError: boolean } | null>(null)
+  const [disparandoPush, setDisparandoPush] = useState(false)
+  const [mensajePush, setMensajePush] = useState<{ texto: string; esError: boolean } | null>(null)
 
   async function onSalir() {
     if (saliendo) return
@@ -132,6 +133,20 @@ export function BackofficeDashboard({
     )
   }
 
+  async function onDispararPush() {
+    if (disparandoPush) return
+    setDisparandoPush(true)
+    setMensajePush(null)
+    const resultado = await ejecutarAccion("/api/backoffice/push", { method: "POST" })
+    setDisparandoPush(false)
+    if (resultado.ok) {
+      const notificadas = (resultado.data as { notificadas?: number } | undefined)?.notificadas ?? 0
+      setMensajePush({ texto: `Push enviado a ${notificadas} suscripción(es)`, esError: false })
+      return
+    }
+    setMensajePush({ texto: resultado.error, esError: true })
+  }
+
   async function onAplicarEscenario(id: EscenarioId) {
     if (escenarioEnCurso) return
     setEscenarioEnCurso(id)
@@ -199,6 +214,9 @@ export function BackofficeDashboard({
           enviandoCorreo={enviandoCorreo}
           mensajeCorreo={mensajeCorreo}
           onEnviarCorreoAhora={onEnviarCorreoAhora}
+          disparandoPush={disparandoPush}
+          mensajePush={mensajePush}
+          onDispararPush={onDispararPush}
         />
         <RegistroSesionCard />
       </div>
@@ -504,6 +522,9 @@ function ComunicacionesCard({
   enviandoCorreo,
   mensajeCorreo,
   onEnviarCorreoAhora,
+  disparandoPush,
+  mensajePush,
+  onDispararPush,
 }: {
   enviarReporteTurno: boolean
   cambiandoToggle: boolean
@@ -511,6 +532,9 @@ function ComunicacionesCard({
   enviandoCorreo: boolean
   mensajeCorreo: { texto: string; esError: boolean } | null
   onEnviarCorreoAhora: () => void
+  disparandoPush: boolean
+  mensajePush: { texto: string; esError: boolean } | null
+  onDispararPush: () => void
 }) {
   return (
     <Card>
@@ -553,21 +577,22 @@ function ComunicacionesCard({
           </p>
         )}
 
-        {COMUNICACIONES.map((accion) => (
-          <div key={accion.id} className="flex items-center justify-between gap-3 border-t border-border pt-3">
-            <div className="flex flex-col gap-1">
-              <Button
-                disabled
-                title={INERT_TITLE_COMUNICACIONES}
-                className="bg-indigo-700 text-white hover:bg-indigo-800"
-              >
-                {accion.etiqueta}
-              </Button>
-              <p className="text-xs text-neutral-500">{accion.detalle}</p>
-            </div>
-            <Badge variant="secondary">Próximamente</Badge>
+        <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
+          <div className="flex flex-col gap-1">
+            <Button onClick={onDispararPush} disabled={disparandoPush} className="bg-indigo-700 text-white hover:bg-indigo-800">
+              {disparandoPush ? "Enviando…" : "Disparar push"}
+            </Button>
+            <p className="text-xs text-neutral-500">Destino: Oficina · severidad ALTA (alerta más reciente abierta)</p>
           </div>
-        ))}
+        </div>
+        {mensajePush && (
+          <p
+            role={mensajePush.esError ? "alert" : "status"}
+            className={`text-xs font-medium ${mensajePush.esError ? "text-destructive" : "text-emerald-700"}`}
+          >
+            {mensajePush.texto}
+          </p>
+        )}
       </CardContent>
     </Card>
   )
