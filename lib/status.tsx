@@ -44,6 +44,34 @@ export const ESTILOS: Record<Severidad, EstiloEstado> = {
   },
 }
 
+/**
+ * J2 (queued batch J, 2026-09-29): fill for the floor's "N alertas nuevas"
+ * strip (`components/new-alerts-poll-strip.tsx`). This is a NOTIFICATION
+ * color, not a 4th state -- it is never used for a KPI/alert-severity word
+ * and must never be confused with the D10 status palette above, especially
+ * PARAR's dark red (both are very dark fills). Kept as its own named export
+ * instead of a 4th entry in ESTILOS so it can never be indexed by
+ * `Severidad` by accident.
+ *
+ * Chosen dark indigo #241a6e / white text:
+ *   - contrast vs white text: 14.50:1 (>= 7:1 AAA-for-large-text plus extra
+ *     margin for tablet glare, see lib/design-rules.test.ts).
+ *   - hue 247° vs PARAR's hue 355° -> 108° apart (well past the 60° margin
+ *     the test requires) -- reads as blue-indigo, not red, even under
+ *     glare or in grayscale.
+ *   - relative luminance 0.0224 vs PARAR's 0.0103 -- more than double, so
+ *     the two dark fills are not perceptually identical either.
+ */
+export const NOTIFICACION = {
+  fondo: "bg-[#241a6e]",
+  texto: "text-white",
+  borde: "border-[#241a6e]",
+  /** Same indigo, as text -- used for the strip's "Entendido" control,
+   * which reverses the fill (white background, indigo text) so it still
+   * reads as a distinct, high-contrast control against the dark strip. */
+  textoAcento: "text-[#241a6e]",
+}
+
 // Palabra de severidad para alertas (distinta de la palabra de estado usada
 // en KPIs y en el estado vacío): ALTA/MEDIA/BAJA, mapeada 1:1 con
 // parar/atencion/ok. Compartida por AlertStack y AlertDetail para que ambos

@@ -1,7 +1,7 @@
 import fs from "node:fs"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
-import { ESTILOS } from "./status"
+import { ESTILOS, NOTIFICACION } from "./status"
 import { isBackofficePath, isOfficePath, scanForViolations } from "./design-rules"
 
 // Guards D4-D13 (see odd/tasks/autoinsight-port.md) so a future change that
@@ -76,6 +76,58 @@ describe("D10: status palette", () => {
     const lumParar = relativeLuminance(bgHex.parar)
     expect(lumOk).toBeGreaterThan(lumAtencion)
     expect(lumAtencion).toBeGreaterThan(lumParar)
+  })
+})
+
+/** Hue in degrees [0, 360) -- used only to confirm the J2 notification color
+ * reads as visually distinct from PARAR's dark red, since luminance alone
+ * (two very dark colors) would not show that on its own. */
+function hue(hex: string): number {
+  const normalized = normalizeHex(hex)
+  const [r, g, b] = normalized
+    .replace("#", "")
+    .match(/\w\w/g)!
+    .map((x) => parseInt(x, 16) / 255)
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const d = max - min
+  if (d === 0) return 0
+  let h: number
+  switch (max) {
+    case r:
+      h = ((g - b) / d) % 6
+      break
+    case g:
+      h = (b - r) / d + 2
+      break
+    default:
+      h = (r - g) / d + 4
+      break
+  }
+  h *= 60
+  return h < 0 ? h + 360 : h
+}
+
+function hueDistance(a: number, b: number): number {
+  const diff = Math.abs(a - b) % 360
+  return diff > 180 ? 360 - diff : diff
+}
+
+describe("J2: notification color (distinct from the D10 status palette, never a state)", () => {
+  const bg = hexFromTailwindArbitrary(NOTIFICACION.fondo)
+  const text = NOTIFICACION.texto === "text-white" ? "#ffffff" : hexFromTailwindArbitrary(NOTIFICACION.texto)
+  const pararBg = hexFromTailwindArbitrary(ESTILOS.parar.fondo)
+
+  it("keeps text/background contrast >= 7:1 (WCAG AAA, extra margin for glare)", () => {
+    expect(contrastRatio(bg, text)).toBeGreaterThanOrEqual(7)
+  })
+
+  it("is not confusable with PARAR's dark red (distinct hue, distinct luminance)", () => {
+    expect(hueDistance(hue(bg), hue(pararBg))).toBeGreaterThan(60)
+    // Not required to match D10's OK > ATENCIÓN > PARAR luminance ordering
+    // (this is not a 4th state) -- just meaningfully different from PARAR's
+    // own luminance so the two dark fills don't read as the same color.
+    expect(Math.abs(relativeLuminance(bg) - relativeLuminance(pararBg))).toBeGreaterThan(0.005)
   })
 })
 

@@ -978,6 +978,66 @@ async function runNewAlertsPollStripScenario(browser, allViolations) {
       allViolations.push("  - kiosk (1280x800) scrolls or overflows horizontally with the strip shown")
     }
 
+    // J2 (queued batch J, 2026-09-29): the strip's icon/count/text must
+    // actually BE the salient sizes the doc comment claims (>= 48px icon,
+    // text-5xl count, >= text-3xl label) -- not just visually plausible.
+    const sizes = await page.evaluate(() => {
+      const strip = document.querySelector('[data-testid="new-alerts-poll-strip"]')
+      if (!strip) return null
+      const icon = strip.querySelector("svg")
+      const countEl = [...strip.querySelectorAll("span")].find((el) => /^\d+$/.test(el.textContent.trim()))
+      const textEl = strip.querySelector("p")
+      const button = strip.querySelector("button")
+      return {
+        iconHeight: icon ? icon.getBoundingClientRect().height : 0,
+        countFontSize: countEl ? parseFloat(getComputedStyle(countEl).fontSize) : 0,
+        textFontSize: textEl ? parseFloat(getComputedStyle(textEl).fontSize) : 0,
+        buttonHeight: button ? button.getBoundingClientRect().height : 0,
+      }
+    })
+    if (!sizes) {
+      allViolations.push("\n== new alerts poll strip / salience ==")
+      allViolations.push("  - strip testid present but no content found to measure")
+    } else {
+      if (sizes.iconHeight < 48) {
+        allViolations.push("\n== new alerts poll strip / salience ==")
+        allViolations.push(`  - icon height ${sizes.iconHeight}px < 48px (size-12)`)
+      }
+      if (sizes.countFontSize < 48) {
+        allViolations.push("\n== new alerts poll strip / salience ==")
+        allViolations.push(`  - count font-size ${sizes.countFontSize}px < 48px (text-5xl)`)
+      }
+      if (sizes.textFontSize < 30) {
+        allViolations.push("\n== new alerts poll strip / salience ==")
+        allViolations.push(`  - label font-size ${sizes.textFontSize}px < 30px (text-3xl)`)
+      }
+      if (sizes.buttonHeight < 88) {
+        allViolations.push("\n== new alerts poll strip / salience ==")
+        allViolations.push(`  - "Entendido" button height ${sizes.buttonHeight}px < 88px`)
+      }
+      if (sizes.iconHeight >= 48 && sizes.countFontSize >= 48 && sizes.textFontSize >= 30 && sizes.buttonHeight >= 88) {
+        console.log("new alerts poll strip: OK (icon/count/text/button sizes meet the salience floor)")
+      }
+    }
+
+    // J2: the strip must fit with no horizontal overflow across the full
+    // responsive range (D27, 320px phone through 1280px kiosk), while still
+    // visible -- not just at the single 1280x800 kiosk check above.
+    const STRIP_WIDTH_SWEEP = [320, 390, 480, 640, 768, 1024, 1280]
+    for (const width of STRIP_WIDTH_SWEEP) {
+      await page.setViewportSize({ width, height: 800 })
+      const stripOverflow = await page.evaluate(() => {
+        const docEl = document.documentElement
+        return docEl.scrollWidth > docEl.clientWidth + 1
+      })
+      if (stripOverflow) {
+        allViolations.push(`\n== new alerts poll strip / width sweep ==`)
+        allViolations.push(`  - horizontal overflow at ${width}px with the strip visible`)
+      }
+    }
+    console.log(`new alerts poll strip: width sweep ${STRIP_WIDTH_SWEEP.join(", ")}px checked for overflow`)
+    await page.setViewportSize({ width: 1280, height: 800 })
+
     await page.getByRole("button", { name: "Entendido" }).click()
     await page.getByTestId("new-alerts-poll-strip").waitFor({ state: "hidden" })
     console.log("new alerts poll strip: OK (dismissible via Entendido)")
