@@ -7,12 +7,11 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ESTILOS } from "@/lib/status"
 import { ejecutarAccion } from "@/lib/backoffice/acciones"
-import { etiquetaIndicador } from "@/lib/backoffice/indicador-etiquetas"
 import { formatearMensajeEscenario, formatearMensajeTurno } from "@/lib/backoffice/mensajes-turno"
-import { formatearResumenAlertas } from "@/lib/backoffice/resumen-alertas"
-import type { EscenarioId, EstadoDemo, IndicadorEstadoDemo, LineaDemoConocida } from "@/lib/domain/floor-repository"
+import { filasEstadoDemo, type CeldaAlertasDemo, type CeldaEstadoDemo } from "@/lib/backoffice/tabla-estado-demo"
+import type { EscenarioId, EstadoDemo, LineaDemoConocida } from "@/lib/domain/floor-repository"
 import { ESCENARIOS } from "@/lib/domain/floor-repository"
-import { formatearHora, type Severidad } from "@/lib/mock-data"
+import { formatearHora } from "@/lib/mock-data"
 import { GUION_PASOS, PLANTA_NOMBRE } from "@/lib/backoffice/sample-data"
 
 // G1: static back-office layout (odd/tasks/assets/shot-backoffice.png).
@@ -260,43 +259,66 @@ export function BackofficeDashboard({
   )
 }
 
-function EstadoLineaChip({ estado }: { estado: Severidad }) {
-  const estilo = ESTILOS[estado]
-  return (
-    <span
-      className={`rounded-md border px-2 py-0.5 text-xs font-bold ${estilo.fondo} ${estilo.textoSobreFondo} ${estilo.borde}`}
-    >
-      {estilo.palabra}
-    </span>
-  )
-}
-
 // D3 (final-demo plan Batch I): a Supabase outage must never render as a
 // healthy plant -- this neutral chip replaces every KPI/alert-severity
 // badge for a line when estadoDemo.datosDisponibles is false, instead of
 // the (fabricated) "ok"/0-alerts placeholder values underneath it.
 function ChipSinDatos() {
   return (
-    <span className="rounded-md border border-neutral-400 bg-neutral-100 px-2 py-0.5 text-xs font-bold text-neutral-600">
+    <span className="rounded-md border border-neutral-400 bg-neutral-100 px-2 py-0.5 text-xs font-bold text-neutral-600 whitespace-nowrap">
       Sin datos
     </span>
   )
 }
 
-// Batch I: one small chip per KPI ("FPY ATENCIÓN"), next to the line's
-// single worst-of chip -- the facilitator can see which specific KPI is
-// driving the line's overall state.
-function ChipsIndicadores({ indicadores }: { indicadores: IndicadorEstadoDemo[] }) {
+// J1 (queued batch J, 2026-09-29): one filled KPI/state cell -- the floor
+// palette color (ESTILOS) plus the state word, `whitespace-nowrap` so the
+// word never wraps at the table's fixed desktop column widths. `null`
+// (D3 "Sin datos") renders the same neutral chip every other fallback uses.
+function CeldaEstadoDemo({ celda }: { celda: CeldaEstadoDemo }) {
+  if (celda === null) return <ChipSinDatos />
+  const estilo = ESTILOS[celda.estado]
+  return (
+    <span
+      className={`inline-block w-full whitespace-nowrap rounded-md border px-1.5 py-1 text-center text-xs font-bold ${estilo.fondo} ${estilo.textoSobreFondo} ${estilo.borde}`}
+    >
+      {estilo.palabra}
+    </span>
+  )
+}
+
+// Compact-card view (< sm): same cell, prefixed with its KPI label
+// ("FPY ATENCIÓN") since the phone layout has no column header to carry it.
+function EtiquetaKpi({ etiqueta, celda }: { etiqueta: string; celda: CeldaEstadoDemo }) {
+  if (celda === null) return <ChipSinDatos />
+  const estilo = ESTILOS[celda.estado]
+  return (
+    <span
+      className={`rounded-md border px-1.5 py-0.5 text-xs font-semibold whitespace-nowrap ${estilo.fondo} ${estilo.textoSobreFondo} ${estilo.borde}`}
+    >
+      {etiqueta} {estilo.palabra}
+    </span>
+  )
+}
+
+// J1: per-severity alert counts as colored badges (never plain gray text
+// for real data) -- "Sin alertas" in near-black text only for the genuine
+// zero-alerts case, distinct from the neutral "Sin datos" fallback.
+function CeldaAlertas({ alertas }: { alertas: CeldaAlertasDemo }) {
+  if (alertas === null) return <ChipSinDatos />
+  if (alertas.total === 0) {
+    return <span className="text-xs font-semibold text-neutral-900">Sin alertas</span>
+  }
   return (
     <div className="flex flex-wrap gap-1">
-      {indicadores.map((i) => {
-        const estilo = ESTILOS[i.estado]
+      {alertas.porSeveridad.map(({ severidad, palabra, cantidad }) => {
+        const estilo = ESTILOS[severidad]
         return (
           <span
-            key={i.clave}
-            className={`rounded-md border px-1.5 py-0.5 text-xs font-semibold ${estilo.fondo} ${estilo.textoSobreFondo} ${estilo.borde}`}
+            key={severidad}
+            className={`rounded-md border px-1.5 py-0.5 text-xs font-bold whitespace-nowrap ${estilo.fondo} ${estilo.textoSobreFondo} ${estilo.borde}`}
           >
-            {etiquetaIndicador(i.clave)} {estilo.palabra}
+            {cantidad} {palabra}
           </span>
         )
       })}
@@ -340,6 +362,7 @@ function EstadoDemoCard({
     estadoDemo.datosDisponibles && ultimasSimulaciones.length > 0
       ? formatearHora(Math.max(...ultimasSimulaciones))
       : "—"
+  const filas = filasEstadoDemo(estadoDemo)
 
   return (
     <Card>
@@ -356,25 +379,82 @@ function EstadoDemoCard({
             {error}
           </p>
         )}
-        <ul className="flex flex-col gap-2">
-          {estadoDemo.lineas.map((linea) => (
-            <li key={linea.nombre} className="flex flex-col gap-1">
+        {/* J1: fixed-column table >= sm (640px) -- Línea | Estado | FPY |
+            Def/h | Scrap | Alertas, so the facilitator sees every line
+            aligned side by side without scanning stacked chips. Collapses
+            to one compact card per line below sm (phone widths). */}
+        <div className="hidden overflow-x-auto sm:block">
+          <table className="w-full table-fixed border-collapse text-sm">
+            <colgroup>
+              <col className="w-32" />
+              <col className="w-24" />
+              <col className="w-20" />
+              <col className="w-20" />
+              <col className="w-20" />
+              <col />
+            </colgroup>
+            <thead>
+              <tr className="border-b border-border text-left text-xs font-semibold text-neutral-500">
+                <th scope="col" className="py-1.5 pr-2">
+                  Línea
+                </th>
+                <th scope="col" className="px-1 py-1.5 text-center">
+                  Estado
+                </th>
+                <th scope="col" className="px-1 py-1.5 text-center">
+                  FPY
+                </th>
+                <th scope="col" className="px-1 py-1.5 text-center">
+                  Def/h
+                </th>
+                <th scope="col" className="px-1 py-1.5 text-center">
+                  Scrap
+                </th>
+                <th scope="col" className="py-1.5 pl-2">
+                  Alertas
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {filas.map((fila) => (
+                <tr key={fila.nombre} className="border-b border-border last:border-0">
+                  <th scope="row" className="py-2 pr-2 text-left font-medium">
+                    {fila.nombre}
+                  </th>
+                  <td className="px-1 py-2 text-center">
+                    <CeldaEstadoDemo celda={fila.estado} />
+                  </td>
+                  <td className="px-1 py-2 text-center">
+                    <CeldaEstadoDemo celda={fila.fpy} />
+                  </td>
+                  <td className="px-1 py-2 text-center">
+                    <CeldaEstadoDemo celda={fila.defH} />
+                  </td>
+                  <td className="px-1 py-2 text-center">
+                    <CeldaEstadoDemo celda={fila.scrap} />
+                  </td>
+                  <td className="py-2 pl-2">
+                    <CeldaAlertas alertas={fila.alertas} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <ul className="flex flex-col gap-2 sm:hidden">
+          {filas.map((fila) => (
+            <li key={fila.nombre} className="flex flex-col gap-1 rounded-md border border-border p-2">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-medium">{linea.nombre}</span>
-                {estadoDemo.datosDisponibles ? (
-                  <EstadoLineaChip estado={linea.estadoKpi} />
-                ) : (
-                  <ChipSinDatos />
-                )}
+                <span className="text-sm font-medium">{fila.nombre}</span>
+                <CeldaEstadoDemo celda={fila.estado} />
               </div>
-              {estadoDemo.datosDisponibles ? (
-                <>
-                  <ChipsIndicadores indicadores={linea.indicadores} />
-                  <p className="text-xs text-neutral-500">{formatearResumenAlertas(linea.alertasPorSeveridad)}</p>
-                </>
-              ) : (
-                <p className="text-xs text-neutral-500">Sin datos</p>
-              )}
+              <div className="flex flex-wrap gap-1">
+                <EtiquetaKpi etiqueta="FPY" celda={fila.fpy} />
+                <EtiquetaKpi etiqueta="Def/h" celda={fila.defH} />
+                <EtiquetaKpi etiqueta="Scrap" celda={fila.scrap} />
+              </div>
+              <CeldaAlertas alertas={fila.alertas} />
             </li>
           ))}
         </ul>
