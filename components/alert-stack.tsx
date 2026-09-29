@@ -59,12 +59,18 @@ function TopAlertCard({
       type="button"
       data-alert-id={alerta.id}
       onClick={(ev) => onAbrir(alerta, ev.currentTarget)}
-      className={`relative flex min-h-35 flex-1 items-center gap-5 rounded-2xl border-4 px-6 py-4 text-left ${e.fondo} ${e.borde} ${e.textoSobreFondo}`}
+      className={`relative flex min-h-35 flex-1 flex-wrap items-center gap-5 rounded-2xl border-4 px-6 py-4 text-left kiosk:flex-nowrap ${e.fondo} ${e.borde} ${e.textoSobreFondo}`}
     >
       {nueva && <NuevaDot />}
       <Icono className="h-24 w-24 shrink-0" strokeWidth={2.5} aria-hidden />
-      <div className="min-w-0 flex-1">
-        <p className="text-5xl font-black uppercase leading-none">{SEVERIDAD_PALABRA[alerta.severidad]}</p>
+      {/* D11/D27: the ALTA/MEDIA/BAJA word (text-5xl) needs its own full-width
+          line below kiosk size -- MEDIA (156px) no longer fits next to the
+          96px icon once the card narrows under ~360px (measured live; see
+          odd/tasks/guerrilla-backoffice.md, bug 2026-09-29 entry). Same
+          basis-full/kiosk:basis-auto pattern SecondaryAlertCard already uses
+          for its title below. */}
+      <div className="min-w-0 flex-1 basis-full kiosk:basis-auto">
+        <p className="break-words text-5xl font-black uppercase leading-none">{SEVERIDAD_PALABRA[alerta.severidad]}</p>
         <p className="mt-2 text-4xl font-bold leading-tight">{alerta.titulo}</p>
         <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-1 text-2xl font-semibold">
           <span className="flex items-center gap-2">

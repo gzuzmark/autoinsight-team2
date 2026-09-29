@@ -44,8 +44,15 @@ export function AlertDetail({
     >
       <div className={`flex flex-wrap items-center gap-5 border-b-4 p-6 ${e.fondo} ${e.borde} ${e.textoSobreFondo}`}>
         <Icono className="h-20 w-20 shrink-0" strokeWidth={2.5} aria-hidden />
-        <div className="min-w-0 flex-1">
-          <p className="text-5xl font-black uppercase leading-none">{SEVERIDAD_PALABRA[alerta.severidad]}</p>
+        {/* D11/D27: without basis-full this flex-1 min-w-0 box shrinks toward
+            0 next to the icon + "Volver" button instead of wrapping (flex-1's
+            zero basis never triggers flex-wrap), clipping the severity word
+            as low as 360-414px wide (measured live; see
+            odd/tasks/guerrilla-backoffice.md, bug 2026-09-29 entry). Forcing
+            its own full-width line below kiosk gives it the whole header
+            width instead. */}
+        <div className="min-w-0 flex-1 basis-full kiosk:basis-auto">
+          <p className="break-words text-5xl font-black uppercase leading-none">{SEVERIDAD_PALABRA[alerta.severidad]}</p>
           <h2
             id="alert-detail-heading"
             ref={headingRef}
