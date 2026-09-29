@@ -116,6 +116,9 @@ never commit `.env.local` or a real `SUPABASE_SECRET_KEY`.
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | VAPID public key (base64url) | — | G7b office Web Push. Read in the browser (`PushManager#subscribe`'s `applicationServerKey`) -- intentionally `NEXT_PUBLIC_*`, unlike every other secret in this table. See "Office push notifications" below for how to generate it. |
 | `VAPID_PRIVATE_KEY` | VAPID private key (base64url) | — | G7b, paired with the public key above. Server-only, never `NEXT_PUBLIC_*`. Missing (with the public key) falls back to a log-only push sender (never fails a shift/scenario/"Disparar push"). |
 | `VAPID_SUBJECT` | `mailto:` URL | `mailto:demo-autoinsight@mailinator.com` | G7b. The Web Push protocol's required contact URL for the push service. |
+| `NEXT_PUBLIC_POSTHOG_KEY` | PostHog project API key (`phc_…`) | — | G8 product analytics. Public by design (read in the browser via `instrumentation-client.ts`). Unset means analytics/replay are a total no-op (`lib/analytics/posthog-client.ts`'s init guard) -- tests, local dev and CI need nothing here. |
+| `NEXT_PUBLIC_POSTHOG_HOST` | PostHog ingest host URL | — | G8, paired with the key above (e.g. `https://us.i.posthog.com`, whichever region the PostHog project uses). |
+| `NEXT_PUBLIC_POSTHOG_PROJECT_URL` | PostHog project URL (browser) | — | G8. Optional. Powers the back office "Registro de la sesión" → "Ver sesiones en PostHog" link; unset disables that button with an honest reason instead of linking nowhere. |
 
 To run the app against a local Supabase stack instead of mock data:
 
@@ -503,6 +506,75 @@ a normal Safari tab on iOS, and needs iOS 16.4+. `public/sw.js` handles the
 notification-data -> url mappings mirror the pure, unit-tested helpers in
 `lib/push/sw-helpers.ts` (kept in sync by hand -- a service worker script
 has no bundler, so it cannot `import` them directly).
+
+## Product analytics (PostHog)
+
+G8 (G4 folded in -- "Decisions", 2026-09-28: session events go ONLY to
+PostHog, no Supabase event table). Off by default: without
+`NEXT_PUBLIC_POSTHOG_KEY`, `lib/analytics/posthog-client.ts`'s init guard
+makes the whole module a no-op (posthog-js is never initialized, no
+network calls) -- true for tests, local dev without a key, and CI.
+
+**Setup (in PostHog, once)**: create a project, copy its API key/host into
+`NEXT_PUBLIC_POSTHOG_KEY`/`NEXT_PUBLIC_POSTHOG_HOST`, then in the project's
+settings enable **"Record user sessions"** (session replay is off by
+default per-project in PostHog -- initializing the SDK alone does not turn
+it on). Optionally set `NEXT_PUBLIC_POSTHOG_PROJECT_URL` to the project's
+URL so the back office can link straight to it.
+
+**Init**: `instrumentation-client.ts` (Next 16's client-instrumentation
+file convention) calls `inicializarPosthog` once per page load, and never
+at all on `/backoffice` (the facilitator tool, not a guerrilla-testing
+participant -- that route is skipped by URL before the SDK ever loads, so
+no script/session starts there). Autocapture is off (explicit events
+only -- see below); `person_profiles: "identified_only"` (no profile for
+an anonymous visitor who never logs in).
+
+**Masking**: `session_recording.maskAllInputs: true` masks every `<input>`
+by default; the PIN pad additionally carries a `ph-no-capture` class
+(`components/pin-pad.tsx`) so it is excluded from replay entirely,
+belt-and-suspenders on top of the digits never being rendered as text in
+the first place (only a dot count).
+
+**Participant**: `private.demo_configuracion.participante_actual` (Supabase)
+/ an equivalent in-memory counter, starting at 1. Back office "Nuevo
+participante" (`POST /api/backoffice/participante`) resets the demo (same
+effect as "Reiniciar demo") and bumps it. `GET /api/tablero` carries the
+current number (`Tablero#participante`); the floor identifies with it
+(`posthog.identify("P<n>", { usuario, linea })`) right after login, and
+re-identifies if it changes mid-session (a facilitator bump while someone
+else's tablero is still polling -- `lib/analytics/identify-on-change.ts`).
+The office has no session, so it reads the same number from
+`GET /api/oficina/participante` (no auth, same model as every other
+`/api/oficina/**` route) before each capture. Logout calls `posthog.reset()`
+so the next login/participant never inherits the previous identity.
+
+**Events** (every one also carries `participante` and `vista`,
+`"planta" | "oficina"` -- payload builders in `lib/analytics/events.ts`):
+
+| Event | Where | Fields |
+| --- | --- | --- |
+| `login` | Floor login | `linea` |
+| `alerta_mostrada` | First time an alert id is visible this session | `alerta_id`, `severidad`, `linea`, `posicion` |
+| `alerta_abierta` | Alert detail panel opened | `alerta_id`, `ms_desde_mostrada` |
+| `alerta_atendida` / `alerta_no_aplica` | Detail panel resolved | `alerta_id`, `ms_desde_abierta`, `ms_desde_mostrada` |
+| `nuevas_alertas_vistas` | G7a's "N alertas nuevas" strip dismissed | `cantidad` |
+| `oficina_alerta_abierta` | Office alert-investigation screen opened | `alerta_id`, `origen` (`"tabla"` \| `"push"`) |
+| `push_activado` / `push_desactivado` | "Activar notificaciones" toggled | — |
+| `notificacion_click` | A browser push notification was clicked | `alerta_id` |
+
+`notificacion_click`/`oficina_alerta_abierta`'s `origen: "push"` come from
+a `?origen=push` query flag `lib/push/payload.ts` bakes into the
+notification's URL, carried through by `public/sw.js`'s `notificationclick`
+handler; the office page's `CapturaAperturaAlerta` client island reads it
+on mount. `ms_desde_mostrada`/`ms_desde_abierta` come from
+`lib/analytics/alerta-timing.ts`, a pure, session-scoped tracker held in
+`components/app-provider.tsx`.
+
+**Viewing a session**: filter PostHog by the `participante` person
+property (or search person `"P<n>"`) to see everything one guerrilla-testing
+participant did, including their session replay if recording is enabled.
+The back office "Registro de la sesión" card links straight there.
 
 ## How KPI tiles change
 

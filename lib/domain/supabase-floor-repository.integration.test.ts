@@ -159,6 +159,20 @@ describe.skipIf(!canRun)("SupabaseFloorRepository (integration, local stack)", (
     expect(resultado!.alerta.severidad).toBe("parar")
     await repo.reiniciarDemo()
   })
+
+  it("G8: nuevoParticipante advances the counter over a real PostgREST round-trip, reflected in estadoDemo/tablero", async () => {
+    const antes = (await repo.estadoDemo()).participanteActual!
+    const nuevo = await repo.nuevoParticipante()
+    expect(nuevo).toBe(antes + 1)
+
+    const estado = await repo.estadoDemo()
+    expect(estado.participanteActual).toBe(nuevo)
+
+    const sessionId = await repo.iniciarSesion(ANA_ID, ANA_PIN)
+    const tablero = await repo.tablero(sessionId!)
+    expect(tablero.participante).toBe(nuevo)
+    await repo.cerrarSesion(sessionId!)
+  })
 })
 
 if (!canRun) {
