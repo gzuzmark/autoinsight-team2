@@ -72,6 +72,33 @@ describe.skipIf(!canRun)("SupabaseFloorRepository (integration, local stack)", (
       SessionInvalidError,
     )
   })
+
+  // Regression for the safeupdate hotfix: `authenticator` (the role
+  // PostgREST always connects as) preloads pg-safeupdate, which rejects any
+  // UPDATE/DELETE without a WHERE clause -- including inside a SECURITY
+  // DEFINER function called through the API. pgTAP (supabase/tests) runs as
+  // plain postgres, which never preloads safeupdate, so it never caught
+  // this; only a real PostgREST round-trip like this one does. Every RPC
+  // below returned a PostgREST 500 ("UPDATE/DELETE requires a WHERE
+  // clause") before the fix.
+  it("back-office demo RPCs run over PostgREST without a safeupdate error", async () => {
+    await expect(repo.reiniciarDemo()).resolves.toBeUndefined()
+
+    for (const linea of ["Línea 1 · Chasis", "Línea 2 · Pintura", "Línea 3 · Motores"] as const) {
+      await expect(repo.simularTurno(linea)).resolves.toBeUndefined()
+    }
+
+    for (const escenario of ["todo-ok", "linea3-parar-alta", "muchas-media", "recuperacion"] as const) {
+      await expect(repo.aplicarEscenario(escenario)).resolves.toBeUndefined()
+    }
+
+    await expect(repo.estadoDemo()).resolves.toEqual(
+      expect.objectContaining({ lineas: expect.any(Array) }),
+    )
+
+    // Leave the demo state clean for anything that runs after this file.
+    await repo.reiniciarDemo()
+  })
 })
 
 if (!canRun) {
