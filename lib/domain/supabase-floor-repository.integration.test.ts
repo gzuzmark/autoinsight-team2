@@ -1,3 +1,4 @@
+import { createClient } from "@supabase/supabase-js"
 import { describe, expect, it } from "vitest"
 import { SessionInvalidError } from "@/lib/domain/floor-repository"
 import { SupabaseFloorRepository } from "@/lib/domain/supabase-floor-repository"
@@ -162,16 +163,36 @@ describe.skipIf(!canRun)("SupabaseFloorRepository (integration, local stack)", (
 
   it("G8: nuevoParticipante advances the counter over a real PostgREST round-trip, reflected in estadoDemo/tablero", async () => {
     const antes = (await repo.estadoDemo()).participanteActual!
-    const nuevo = await repo.nuevoParticipante()
-    expect(nuevo).toBe(antes + 1)
+    try {
+      const nuevo = await repo.nuevoParticipante()
+      expect(nuevo).toBe(antes + 1)
 
-    const estado = await repo.estadoDemo()
-    expect(estado.participanteActual).toBe(nuevo)
+      const estado = await repo.estadoDemo()
+      expect(estado.participanteActual).toBe(nuevo)
 
-    const sessionId = await repo.iniciarSesion(ANA_ID, ANA_PIN)
-    const tablero = await repo.tablero(sessionId!)
-    expect(tablero.participante).toBe(nuevo)
-    await repo.cerrarSesion(sessionId!)
+      const sessionId = await repo.iniciarSesion(ANA_ID, ANA_PIN)
+      const tablero = await repo.tablero(sessionId!)
+      expect(tablero.participante).toBe(nuevo)
+      await repo.cerrarSesion(sessionId!)
+    } finally {
+      // K-2: this test's own nuevoParticipante() call permanently advances
+      // private.demo_configuracion.participante_actual on the shared local
+      // stack -- neither reiniciarDemo() nor aplicarEscenario() touch that
+      // column by design (see migration 20260929000029's comment), so
+      // nothing else in this suite resets it back down. Left unrestored,
+      // supabase/tests/21_demo_participante.test.sql's "defaults to 1"
+      // assertion fails the next time `supabase test db` runs WITHOUT a
+      // `supabase db reset --local` in between (pgTAP's own
+      // `begin; ... rollback;` wrapper only protects state pgTAP itself
+      // changes, not state this already-committed JS process changed).
+      // Restore it here, via the test/ops-only RPC added for exactly this
+      // (migration 20260929000030), using a fresh admin client rather than
+      // the repository under test -- this call is not part of
+      // SupabaseFloorRepository's production surface.
+      const admin = createClient(url!, secretKey!)
+      const { error } = await admin.rpc("demo_restaurar_participante_actual", { p_valor: antes })
+      if (error) throw error
+    }
   })
 })
 

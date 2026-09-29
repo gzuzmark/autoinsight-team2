@@ -502,6 +502,10 @@ export type Database = {
       demo_nuevo_participante: { Args: never; Returns: number }
       demo_participante_actual: { Args: never; Returns: number }
       demo_reiniciar: { Args: never; Returns: undefined }
+      demo_restaurar_participante_actual: {
+        Args: { p_valor: number }
+        Returns: undefined
+      }
       demo_set_enviar_reporte_turno: {
         Args: { p_valor: boolean }
         Returns: undefined
