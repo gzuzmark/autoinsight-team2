@@ -42,7 +42,12 @@ export type Tablero = {
   indicadores: IndicadorTablero[]
   /** Active alerts only ("nueva"), sorted (see lib/domain/alerts.ts). */
   alertas: Alerta[]
-  /** Epoch ms; "Última actualización HH:MM" (D6) is derived from this. */
+  /** Epoch ms of the last time this line's underlying data changed in the
+   * DB. NOT what "Última actualización HH:MM" (D6) shows any more (Batch I,
+   * final-demo plan 2026-09-29): the header now shows the client's own
+   * last-successful-poll time instead (lib/domain/ultima-actualizacion-poll.ts),
+   * since a line whose data never changes between two polls would
+   * otherwise show a stale time despite the app polling it live. */
   ultimaActualizacion: number
   /** Epoch ms of the end of the user's previous session, or null on first
    * visit / no previous closed session (D9). */
@@ -81,6 +86,12 @@ export function esLineaDemoConocida(valor: unknown): valor is LineaDemoConocida 
  * words ALTA/MEDIA/BAJA via `SEVERIDAD_PALABRA`, D8). */
 export type AlertasPorSeveridad = Record<Severidad, number>
 
+/** Batch I (final-demo plan, 2026-09-29): one line's single KPI state, for
+ * the back office's per-line KPI chips ("FPY ATENCIÓN · Defectos/h ATENCIÓN
+ * · Scrap OK") -- independent of `LineaEstadoDemo#estadoKpi`'s worst-of
+ * collapse, which still drives the single line-level chip. */
+export type IndicadorEstadoDemo = { clave: string; estado: Severidad }
+
 /** G2 back-office "Estado de la demo" card: one row per known line. */
 export type LineaEstadoDemo = {
   nombre: LineaDemoConocida
@@ -93,6 +104,10 @@ export type LineaEstadoDemo = {
    * tablet once a KPI recovers while its alert is still open (D26).
    */
   estadoKpi: Severidad
+  /** Batch I: the line's own fpy/dph/scrap states, in that stable order,
+   * for the per-line KPI chips (`demo_estado_lineas()`'s new `indicadores`
+   * field). Empty in the D3 fallback placeholder (see `EstadoDemo#datosDisponibles`). */
+  indicadores: IndicadorEstadoDemo[]
   /** H3: open alerts on the line, broken down by severity (D8 words via
    * `SEVERIDAD_PALABRA`) -- shown next to the KPI chip so the facilitator
    * still sees alert activity even though the chip itself is KPI-only. */
@@ -112,6 +127,14 @@ export type EstadoDemo = {
    * (default true -- see `setEnviarReporteTurno`). Persisted so it survives
    * a page reload/server restart, same lifetime as `escenarioActivo`. */
   enviarReporteTurno: boolean
+  /** D3 (final-demo plan Batch I, RDD review G3 follow-up
+   * R3-fallback-reports-ok): true for every real adapter response. False
+   * ONLY in the fallback placeholder `resolverEstadoDemo` builds when the
+   * server-side `estadoDemo()` fetch itself failed -- the one signal the
+   * dashboard needs to render an explicit "Sin datos" neutral state
+   * instead of fabricating a healthy plant (never OK / never 0 alerts by
+   * omission). */
+  datosDisponibles: boolean
 }
 
 /** G6: KPI + still-open-alert snapshot needed to build the shift-report

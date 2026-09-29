@@ -269,6 +269,13 @@ export class InMemoryFloorRepository implements FloorRepository {
           // decoupled from the alerts' own severities -- see
           // LineaEstadoDemo#estadoKpi's doc.
           estadoKpi: peorSeveridad(estado.indicadoresState.map((i) => indicadorATablero(i).estado)),
+          // Batch I: fpy/dph/scrap in that stable order -- indicadoresState
+          // preserves INDICADORES' own declaration order (mock-data.ts),
+          // which already is fpy, dph, scrap.
+          indicadores: estado.indicadoresState.map((i) => {
+            const tablero = indicadorATablero(i)
+            return { clave: tablero.id, estado: tablero.estado }
+          }),
           alertasPorSeveridad: contarPorSeveridad(activas),
           alertasAbiertas: activas.length,
           ultimaSimulacion: estado.ultimaSimulacion,
@@ -276,6 +283,10 @@ export class InMemoryFloorRepository implements FloorRepository {
       }),
       escenarioActivo: this.escenarioActivo,
       enviarReporteTurno: this.enviarReporteTurno,
+      // Batch I: mock mode derives this synchronously from its own
+      // in-memory state -- it cannot fail independently (same rationale as
+      // ReporteTurnoDatos#datosDisponibles in simularTurno below).
+      datosDisponibles: true,
     }
   }
 

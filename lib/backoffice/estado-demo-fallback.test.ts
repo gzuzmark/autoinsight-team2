@@ -8,12 +8,18 @@ describe("resolverEstadoDemo (C4, RDD review G2)", () => {
       lineas: LINEAS_DEMO_CONOCIDAS.map((nombre) => ({
         nombre,
         estadoKpi: "ok",
+        indicadores: [
+          { clave: "fpy", estado: "ok" },
+          { clave: "dph", estado: "ok" },
+          { clave: "scrap", estado: "ok" },
+        ],
         alertasPorSeveridad: { parar: 0, atencion: 0, ok: 0 },
         alertasAbiertas: 0,
         ultimaSimulacion: null,
       })),
       escenarioActivo: null,
       enviarReporteTurno: true,
+      datosDisponibles: true,
     }
     const resultado = resolverEstadoDemo({ ok: true, data: real })
     expect(resultado.estadoDemo).toBe(real)
@@ -25,13 +31,19 @@ describe("resolverEstadoDemo (C4, RDD review G2)", () => {
     expect(resultado.error).toBe("boom")
     expect(resultado.estadoDemo.lineas.map((l) => l.nombre).sort()).toEqual([...LINEAS_DEMO_CONOCIDAS].sort())
     expect(resultado.estadoDemo.escenarioActivo).toBeNull()
-    // Every line reports "unknown" honestly (0 open alerts / ok is a lie we
-    // must not fabricate) -- see the module doc for why alertasAbiertas is
-    // deliberately 0 here rather than an invented larger number.
     for (const linea of resultado.estadoDemo.lineas) {
       expect(linea.ultimaSimulacion).toBeNull()
-      expect(linea.estadoKpi).toBe("ok")
-      expect(linea.alertasPorSeveridad).toEqual({ parar: 0, atencion: 0, ok: 0 })
     }
+  })
+
+  // D3 (final-demo plan Batch I, RDD review G3 follow-up R3-fallback-reports-ok):
+  // the fallback must never claim a healthy plant ("ok"/0 alerts) during an
+  // outage -- only the inline error banner said otherwise before, and
+  // nothing pinned that down. `datosDisponibles: false` is the one signal
+  // the dashboard needs to render an explicit "Sin datos" neutral chip
+  // instead of a real KPI/alert state (see backoffice-dashboard.tsx).
+  it("D3: reports datosDisponibles false on failure -- never a fabricated healthy state", () => {
+    const resultado = resolverEstadoDemo({ ok: false, error: "boom" })
+    expect(resultado.estadoDemo.datosDisponibles).toBe(false)
   })
 })

@@ -64,3 +64,47 @@ describe("SupabaseFloorRepository#simularTurno (E1)", () => {
     expect(reporte.alertasAbiertas).toBe(0)
   })
 })
+
+describe("SupabaseFloorRepository#estadoDemo (Batch I: per-line KPI chips)", () => {
+  it("maps the new per-KPI indicadores field and reports datosDisponibles true", async () => {
+    const { SupabaseFloorRepository } = await import("@/lib/domain/supabase-floor-repository")
+    const repo = new SupabaseFloorRepository("https://x.test", "secret")
+
+    rpc.mockImplementation((fn: string) => {
+      if (fn === "demo_estado_lineas") {
+        return Promise.resolve({
+          data: [
+            {
+              nombre: "Línea 3 · Motores",
+              estado_kpi: "parar",
+              alertas_abiertas: 1,
+              alertas_alta: 1,
+              alertas_media: 0,
+              alertas_baja: 0,
+              ultima_simulacion: null,
+              indicadores: [
+                { clave: "fpy", estado: "parar" },
+                { clave: "dph", estado: "ok" },
+                { clave: "scrap", estado: "ok" },
+              ],
+            },
+          ],
+          error: null,
+        })
+      }
+      if (fn === "demo_estado_activo") return Promise.resolve({ data: null, error: null })
+      if (fn === "demo_enviar_reporte_turno") return Promise.resolve({ data: true, error: null })
+      throw new Error(`unexpected rpc: ${fn}`)
+    })
+
+    const estado = await repo.estadoDemo()
+
+    expect(estado.datosDisponibles).toBe(true)
+    const linea = estado.lineas.find((l) => l.nombre === "Línea 3 · Motores")!
+    expect(linea.indicadores).toEqual([
+      { clave: "fpy", estado: "parar" },
+      { clave: "dph", estado: "ok" },
+      { clave: "scrap", estado: "ok" },
+    ])
+  })
+})

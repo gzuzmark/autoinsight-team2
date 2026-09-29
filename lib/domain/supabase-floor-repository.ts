@@ -99,6 +99,9 @@ export class SupabaseFloorRepository implements FloorRepository {
         .map((f) => ({
           nombre: f.nombre,
           estadoKpi: f.estado_kpi,
+          // Batch I: the RPC already returns fpy/dph/scrap in that stable
+          // order (see the migration) -- passed through as-is.
+          indicadores: f.indicadores ?? [],
           alertasPorSeveridad: { parar: f.alertas_alta, atencion: f.alertas_media, ok: f.alertas_baja },
           alertasAbiertas: f.alertas_abiertas,
           ultimaSimulacion: f.ultima_simulacion ? new Date(f.ultima_simulacion).getTime() : null,
@@ -109,6 +112,10 @@ export class SupabaseFloorRepository implements FloorRepository {
       // G6: reporteResult.data is boolean | null; null (should not happen --
       // the singleton row always has a value) degrades to the real default.
       enviarReporteTurno: reporteResult.data ?? true,
+      // Batch I: a real fetch that reached this point succeeded -- only the
+      // D3 fallback (lib/backoffice/estado-demo-fallback.ts) ever reports
+      // false.
+      datosDisponibles: true,
     }
   }
 
@@ -251,6 +258,9 @@ type EstadoLineaRow = {
   alertas_media: number
   alertas_baja: number
   ultima_simulacion: string | null
+  /** Batch I: fpy/dph/scrap in that stable order (see
+   * LineaEstadoDemo#indicadores's doc). */
+  indicadores: Array<{ clave: string; estado: Severidad }>
 }
 
 /** Shape of the jsonb `public.tablero(uuid)` RPC result (see the migration

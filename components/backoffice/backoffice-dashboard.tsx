@@ -8,8 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ESTILOS } from "@/lib/status"
 import { ejecutarAccion } from "@/lib/backoffice/acciones"
+import { etiquetaIndicador } from "@/lib/backoffice/indicador-etiquetas"
 import { formatearResumenAlertas } from "@/lib/backoffice/resumen-alertas"
-import type { EscenarioId, EstadoDemo, LineaDemoConocida } from "@/lib/domain/floor-repository"
+import type { EscenarioId, EstadoDemo, IndicadorEstadoDemo, LineaDemoConocida } from "@/lib/domain/floor-repository"
 import { ESCENARIOS } from "@/lib/domain/floor-repository"
 import { formatearHora, type Severidad } from "@/lib/mock-data"
 import { COMUNICACIONES, GUION_PASOS, PARTICIPANTE_ACTUAL, PLANTA_NOMBRE, REGISTRO_SESION } from "@/lib/backoffice/sample-data"
@@ -218,6 +219,39 @@ function EstadoLineaChip({ estado }: { estado: Severidad }) {
   )
 }
 
+// D3 (final-demo plan Batch I): a Supabase outage must never render as a
+// healthy plant -- this neutral chip replaces every KPI/alert-severity
+// badge for a line when estadoDemo.datosDisponibles is false, instead of
+// the (fabricated) "ok"/0-alerts placeholder values underneath it.
+function ChipSinDatos() {
+  return (
+    <span className="rounded-md border border-neutral-400 bg-neutral-100 px-2 py-0.5 text-xs font-bold text-neutral-600">
+      Sin datos
+    </span>
+  )
+}
+
+// Batch I: one small chip per KPI ("FPY ATENCIÓN"), next to the line's
+// single worst-of chip -- the facilitator can see which specific KPI is
+// driving the line's overall state.
+function ChipsIndicadores({ indicadores }: { indicadores: IndicadorEstadoDemo[] }) {
+  return (
+    <div className="flex flex-wrap gap-1">
+      {indicadores.map((i) => {
+        const estilo = ESTILOS[i.estado]
+        return (
+          <span
+            key={i.clave}
+            className={`rounded-md border px-1.5 py-0.5 text-xs font-semibold ${estilo.fondo} ${estilo.textoSobreFondo} ${estilo.borde}`}
+          >
+            {etiquetaIndicador(i.clave)} {estilo.palabra}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
 function EstadoDemoCard({
   estadoDemo,
   error,
@@ -235,11 +269,19 @@ function EstadoDemoCard({
   mensaje: string | null
   onReiniciar: () => void
 }) {
-  const alertasAbiertas = estadoDemo.lineas.reduce((total, l) => total + l.alertasAbiertas, 0)
+  // D3: while data is unavailable, the summary numbers below must not lie
+  // either (0 open alerts would read as "all clear") -- "—" like a never-
+  // simulated line already shows.
+  const alertasAbiertas = estadoDemo.datosDisponibles
+    ? estadoDemo.lineas.reduce((total, l) => total + l.alertasAbiertas, 0)
+    : null
   const ultimasSimulaciones = estadoDemo.lineas
     .map((l) => l.ultimaSimulacion)
     .filter((ts): ts is number => ts !== null)
-  const ultimoTurno = ultimasSimulaciones.length > 0 ? formatearHora(Math.max(...ultimasSimulaciones)) : "—"
+  const ultimoTurno =
+    estadoDemo.datosDisponibles && ultimasSimulaciones.length > 0
+      ? formatearHora(Math.max(...ultimasSimulaciones))
+      : "—"
 
   return (
     <Card>
@@ -261,9 +303,20 @@ function EstadoDemoCard({
             <li key={linea.nombre} className="flex flex-col gap-1">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-medium">{linea.nombre}</span>
-                <EstadoLineaChip estado={linea.estadoKpi} />
+                {estadoDemo.datosDisponibles ? (
+                  <EstadoLineaChip estado={linea.estadoKpi} />
+                ) : (
+                  <ChipSinDatos />
+                )}
               </div>
-              <p className="text-xs text-neutral-500">{formatearResumenAlertas(linea.alertasPorSeveridad)}</p>
+              {estadoDemo.datosDisponibles ? (
+                <>
+                  <ChipsIndicadores indicadores={linea.indicadores} />
+                  <p className="text-xs text-neutral-500">{formatearResumenAlertas(linea.alertasPorSeveridad)}</p>
+                </>
+              ) : (
+                <p className="text-xs text-neutral-500">Sin datos</p>
+              )}
             </li>
           ))}
         </ul>
@@ -271,7 +324,7 @@ function EstadoDemoCard({
         <div className="grid grid-cols-2 gap-3 border-t border-border pt-3">
           <div>
             <p className="text-xs text-neutral-500">Alertas abiertas</p>
-            <p className="text-lg font-bold">{alertasAbiertas}</p>
+            <p className="text-lg font-bold">{alertasAbiertas ?? "—"}</p>
           </div>
           <div>
             <p className="text-xs text-neutral-500">Último turno</p>

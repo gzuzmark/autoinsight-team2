@@ -226,6 +226,27 @@ describe("InMemoryFloorRepository", () => {
       const estado = await repo.estadoDemo()
       expect(estado.escenarioActivo).toBeNull()
     })
+
+    it("Batch I: reports datosDisponibles true (a real adapter never fabricates 'unknown')", async () => {
+      const estado = await repo.estadoDemo()
+      expect(estado.datosDisponibles).toBe(true)
+    })
+
+    it("Batch I: each line's indicadores lists fpy/dph/scrap in that stable order with their own state", async () => {
+      const estado = await repo.estadoDemo()
+      const activa = estado.lineas.find((l) => l.nombre === LINEA_ACTIVA)!
+      expect(activa.indicadores.map((i) => i.clave)).toEqual(["fpy", "dph", "scrap"])
+      // Línea 3 seed: fpy 88.4 -> parar (matches estadoKpi's worst-of above).
+      expect(activa.indicadores.find((i) => i.clave === "fpy")!.estado).toBe("parar")
+    })
+
+    it("Batch I: indicadores reflects the line's own baseline, not Línea 3's", async () => {
+      const estado = await repo.estadoDemo()
+      const linea2 = estado.lineas.find((l) => l.nombre === "Línea 2 · Pintura")!
+      // Línea 2 seed: fpy/dph/scrap all in the atencion band.
+      expect(linea2.indicadores.map((i) => i.clave)).toEqual(["fpy", "dph", "scrap"])
+      for (const i of linea2.indicadores) expect(i.estado).toBe("atencion")
+    })
   })
 
   describe("reiniciarDemo (G2)", () => {

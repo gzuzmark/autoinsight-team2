@@ -103,8 +103,20 @@ describe.skipIf(!canRun)("SupabaseFloorRepository (integration, local stack)", (
     }
 
     await expect(repo.estadoDemo()).resolves.toEqual(
-      expect.objectContaining({ lineas: expect.any(Array), enviarReporteTurno: expect.any(Boolean) }),
+      expect.objectContaining({
+        lineas: expect.any(Array),
+        enviarReporteTurno: expect.any(Boolean),
+        // Batch I: real fetch, never the D3 fallback's false.
+        datosDisponibles: true,
+      }),
     )
+
+    // Batch I: demo_estado_lineas()'s new `indicadores` field, over a real
+    // PostgREST round-trip -- fpy/dph/scrap in that stable order.
+    const estado = await repo.estadoDemo()
+    const linea3 = estado.lineas.find((l) => l.nombre === "Línea 3 · Motores")!
+    expect(linea3.indicadores.map((i) => i.clave)).toEqual(["fpy", "dph", "scrap"])
+    for (const i of linea3.indicadores) expect(["ok", "atencion", "parar"]).toContain(i.estado)
 
     // G6: the toggle RPCs run over PostgREST too (same safeupdate concern:
     // the setter is an UPDATE on the demo_configuracion singleton).

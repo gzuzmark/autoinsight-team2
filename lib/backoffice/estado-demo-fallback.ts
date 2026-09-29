@@ -31,7 +31,11 @@ function estadoDemoFallback(): EstadoDemo {
   return {
     lineas: LINEAS_DEMO_CONOCIDAS.map((nombre) => ({
       nombre,
+      // D3: these KPI/alert fields are never read by the dashboard while
+      // datosDisponibles is false (see backoffice-dashboard.tsx) -- kept as
+      // an inert, type-valid placeholder rather than displayed data.
       estadoKpi: "ok" as const,
+      indicadores: [],
       alertasPorSeveridad: { parar: 0, atencion: 0, ok: 0 },
       alertasAbiertas: 0,
       ultimaSimulacion: null,
@@ -41,5 +45,9 @@ function estadoDemoFallback(): EstadoDemo {
     // (its real default) rather than fabricating an "off" the facilitator
     // never chose; the "Comunicaciones" card stays usable regardless.
     enviarReporteTurno: true,
+    // D3 (RDD review G3 follow-up R3-fallback-reports-ok): the ONE signal
+    // that makes the dashboard render "Sin datos" instead of the (unread)
+    // ok/0-alerts placeholder fields above.
+    datosDisponibles: false,
   }
 }
