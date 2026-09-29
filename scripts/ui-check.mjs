@@ -110,6 +110,7 @@ async function main() {
     await runOfficeDarkModeScenario(browser, allViolations)
     await runBackofficeScenario(browser, allViolations)
     await runNewAlertsPollStripScenario(browser, allViolations)
+    await runIndicatorWorstCaseScenario(browser, allViolations)
     await runAutoRefreshScenario(browser, allViolations)
   } finally {
     await browser.close()
@@ -204,6 +205,30 @@ async function runScenariosAtViewport(browser, viewport, allViolations) {
           if (hidesOverflowX && el.scrollWidth > el.clientWidth + CLIP_SLACK) {
             violations.push(
               `clipped (overflow-x hidden): scrollWidth=${el.scrollWidth} clientWidth=${el.clientWidth} <${el.tagName.toLowerCase()}> "${label}"`,
+            )
+          }
+        }
+
+        // Bug (2026-09-29): text overflowing its OWN box with no
+        // overflow-hidden anywhere in the ancestor chain (e.g. a single
+        // uppercase word too wide for its flex child) never trips the
+        // overflow-hidden check above, and — with overflow: visible, the
+        // default — it does not enlarge any ancestor's scrollWidth either,
+        // so it can slip past both the clipped-content and the
+        // document-level horizontal-overflow checks while still visibly
+        // spilling over neighboring content. Catch it directly: a leaf text
+        // element whose own scrollWidth exceeds its own clientWidth has
+        // nowhere left to wrap (a normal multi-line wrap only grows height,
+        // not width), so that gap is real overflow, not layout noise.
+        for (const el of main.querySelectorAll("*")) {
+          const hasOwnText = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())
+          if (!hasOwnText) continue
+          if (getComputedStyle(el).textOverflow === "ellipsis") continue
+          const r = el.getBoundingClientRect()
+          if (r.width <= 1 || r.height <= 1) continue
+          if (el.scrollWidth > el.clientWidth + CLIP_SLACK) {
+            violations.push(
+              `text overflows its own box: scrollWidth=${el.scrollWidth} clientWidth=${el.clientWidth} <${el.tagName.toLowerCase()}> "${el.textContent.trim().slice(0, 40)}"`,
             )
           }
         }
@@ -928,6 +953,104 @@ async function runNewAlertsPollStripScenario(browser, allViolations) {
     allViolations.push(`\n== new alerts poll strip (G7a) ==`)
     allViolations.push(`  - ${err.message}`)
     console.log("new alerts poll strip: FAILED")
+  } finally {
+    await page.close()
+  }
+}
+
+// Bug (2026-09-29): the 4 fixed VIEWPORTS jump straight from 768 to 1512,
+// stepping clean over the width range where the KPI grid used to switch to 3
+// columns (`md:grid-cols-3`, 768px) -- exactly where "ATENCIÓN" (the longest
+// state word) no longer fit next to its icon. The grid now switches at the
+// standard `lg` breakpoint (1024px, see components/indicators-row.tsx), so
+// these add the two widths the task called out plus the exact
+// breakpoint-1px point, on top of the 4 fixed sizes.
+const KPI_WORST_CASE_VIEWPORTS = [
+  ...VIEWPORTS,
+  { name: "900x700 (pre-lg)", width: 900, height: 700, allowScroll: true },
+  { name: "1023x768 (lg - 1px, KPI grid still 1 column)", width: 1023, height: 768, allowScroll: true },
+  { name: "1024x768 (lg, KPI grid goes 3 columns)", width: 1024, height: 768, allowScroll: true },
+]
+
+// Its own synthetic x-forwarded-for, same rationale as UI_CHECK_NEW_ALERTS_IP:
+// a dedicated bucket so this scenario's login never competes with the
+// shared "unknown-client" budget the floor/office scenarios above already
+// spend most of.
+const UI_CHECK_KPI_WORDS_IP = "127.0.0.4"
+
+// Bug (2026-09-29): force every KPI tile to the longest state word
+// ("ATENCIÓN") and sweep the widths where the 3-column KPI grid turns on,
+// asserting no overflow/clipping. No mock scenario puts all 3 KPI tiles of
+// the active line in ATENCIÓN at once ("muchas-media" only pushes one
+// indicator -- see lib/domain/in-memory-floor-repository.ts), and D28
+// forbids adding an in-app (floor/office) trigger that would. Overriding
+// the rendered word directly in the DOM is the deterministic, mock-only
+// alternative: it never touches application code or a floor/office
+// control, and it measures exactly what matters here -- the real width
+// "ATENCIÓN" takes at text-5xl in the real rendered font, which is a static
+// property of the word/font, not of which line or scenario produced it.
+async function runIndicatorWorstCaseScenario(browser, allViolations) {
+  console.log("\n--- KPI tiles worst case (bug 2026-09-29: every tile forced to ATENCIÓN) ---")
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
+  await page.setExtraHTTPHeaders({ "x-forwarded-for": UI_CHECK_KPI_WORDS_IP })
+  try {
+    await page.goto(`${BASE_URL}/planta`, { waitUntil: "networkidle" })
+    await page.getByRole("button", { name: /Ana Ríos/ }).click()
+    await page.getByText("Ingresa tu PIN").waitFor({ state: "visible" })
+    for (const d of "1234") await page.getByRole("button", { name: d, exact: true }).click()
+    await page.getByRole("button", { name: "Salir" }).waitFor({ state: "visible" })
+
+    await page.evaluate(() => {
+      const root = document.querySelector('[data-testid="indicators-row"]')
+      if (!root) return
+      for (const tile of root.children) {
+        const word = tile.querySelectorAll("p")[1]
+        if (word) word.textContent = "ATENCIÓN"
+      }
+    })
+
+    for (const { name, width, height, allowScroll } of KPI_WORST_CASE_VIEWPORTS) {
+      await page.setViewportSize({ width, height })
+      const result = await page.evaluate(
+        ({ allowScroll, CLIP_SLACK }) => {
+          const violations = []
+          const docEl = document.documentElement
+          if (docEl.scrollWidth > docEl.clientWidth + 1) {
+            violations.push(`horizontal overflow: scrollWidth=${docEl.scrollWidth} clientWidth=${docEl.clientWidth}`)
+          }
+          if (!allowScroll && docEl.scrollHeight > docEl.clientHeight + 1) {
+            violations.push(`document scroll: scrollHeight=${docEl.scrollHeight} clientHeight=${docEl.clientHeight}`)
+          }
+          const root = document.querySelector('[data-testid="indicators-row"]')
+          if (!root) {
+            violations.push("no indicators-row found")
+            return violations
+          }
+          for (const el of root.querySelectorAll("*")) {
+            const hasOwnText = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())
+            if (!hasOwnText) continue
+            const r = el.getBoundingClientRect()
+            if (r.width <= 1 || r.height <= 1) continue
+            if (el.scrollWidth > el.clientWidth + CLIP_SLACK) {
+              violations.push(
+                `KPI tile text overflows its own box: scrollWidth=${el.scrollWidth} clientWidth=${el.clientWidth} <${el.tagName.toLowerCase()}> "${el.textContent.trim().slice(0, 40)}"`,
+              )
+            }
+          }
+          return violations
+        },
+        { allowScroll, CLIP_SLACK: 6 },
+      )
+      if (result.length > 0) {
+        allViolations.push(`\n== KPI worst case / ${name} ==`)
+        allViolations.push(...result.map((v) => `  - ${v}`))
+      }
+      console.log(`KPI worst case / ${name}: ${result.length === 0 ? "OK" : `${result.length} violation(s)`}`)
+    }
+  } catch (err) {
+    allViolations.push(`\n== KPI worst case ==`)
+    allViolations.push(`  - ${err.message}`)
+    console.log("KPI worst case: FAILED")
   } finally {
     await page.close()
   }
