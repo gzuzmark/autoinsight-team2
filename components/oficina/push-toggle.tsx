@@ -14,6 +14,9 @@ import {
 import { eventoPushCambiado } from "@/lib/analytics/events"
 import { capturarEvento } from "@/lib/analytics/posthog-client"
 import { obtenerIdParticipanteOficina } from "@/lib/oficina/participante-cliente"
+import { conLimite } from "@/lib/push/with-timeout"
+
+const LIMITE_SERVICE_WORKER_LISTO_MS = 10_000
 
 // G8: fires push_activado/push_desactivado only on a real state change the
 // user caused (never on the on-load re-sync, which can also land on
@@ -104,10 +107,20 @@ export function PushToggle() {
       // installing/activating (observed in Zen: subscribe() then failed
       // silently, no server request at all). `ready`'s registration is the
       // one guaranteed to have an active worker.
+      //
+      // L-3: `ready` itself never rejects on its own -- a worker that never
+      // reaches "activated" (a broken sw.js, a browser bug, a stuck install)
+      // left this hanging on "Activando..." forever, with no way out short
+      // of reloading. `conLimite` bounds it; a timeout is treated the same
+      // as any other failure to become ready.
       let registro: ServiceWorkerRegistration
       try {
         await navigator.serviceWorker.register("/sw.js")
-        registro = await navigator.serviceWorker.ready
+        registro = await conLimite(
+          navigator.serviceWorker.ready,
+          LIMITE_SERVICE_WORKER_LISTO_MS,
+          "Service worker: tiempo de espera agotado.",
+        )
       } catch {
         setEstado("error")
         setMensajeError(mensajeErrorServiceWorker())
