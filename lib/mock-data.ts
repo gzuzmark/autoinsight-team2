@@ -179,3 +179,12 @@ export function formatearHora(timestamp: number): string {
     hourCycle: "h23",
   })
 }
+
+/** G6: "DD/MM/AAAA HH:MM" (es-AR, same h23 rationale as `formatearHora`) for
+ * the shift-report email's subject line ("Reporte de turno — <línea> —
+ * <fecha hora>"). */
+export function formatearFechaHora(timestamp: number): string {
+  const fecha = new Date(timestamp)
+  const fechaStr = fecha.toLocaleDateString("es-AR")
+  return `${fechaStr} ${formatearHora(timestamp)}`
+}

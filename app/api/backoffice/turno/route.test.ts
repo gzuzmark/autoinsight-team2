@@ -3,6 +3,9 @@ import { setFloorRepositoryForTests } from "@/lib/floor-repository"
 import { InMemoryFloorRepository } from "@/lib/domain/in-memory-floor-repository"
 import { currentToken } from "@/lib/backoffice/key-gate"
 import { BACKOFFICE_COOKIE_NAME } from "@/lib/api/backoffice-cookie"
+import { resetEmailSenderForTests, setEmailSenderForTests } from "@/lib/email/get-email-sender"
+import { LogEmailSender } from "@/lib/email/log-sender"
+import type { EmailSender } from "@/lib/email/sender"
 import { POST } from "./route"
 
 function req(body: unknown, cookie?: string): Request {
@@ -25,6 +28,7 @@ describe("POST /api/backoffice/turno", () => {
 
   afterEach(() => {
     vi.unstubAllEnvs()
+    resetEmailSenderForTests()
   })
 
   it("fails closed with 503 when BACKOFFICE_KEY is unset", async () => {
@@ -68,5 +72,50 @@ describe("POST /api/backoffice/turno", () => {
     expect(res.status).toBe(200)
     expect(spy).toHaveBeenCalledWith("Línea 3 · Motores")
     expect(res.headers.get("cache-control")).toBe("no-store")
+  })
+
+  describe("G6: shift-report email", () => {
+    it("sends the shift report and reports correo: 'enviado' when the toggle is ON (default)", async () => {
+      vi.stubEnv("BACKOFFICE_KEY", "dev-facilitador")
+      const token = currentToken()!
+      const sender = new LogEmailSender()
+      setEmailSenderForTests(sender)
+
+      const res = await POST(req({ linea: "Línea 3 · Motores" }, token))
+      const body = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(body).toEqual({ ok: true, correo: "enviado" })
+      expect(sender.enviados).toHaveLength(1)
+      expect(sender.enviados[0].subject).toContain("Reporte de turno")
+    })
+
+    it("skips the email and reports correo: 'omitido' when the toggle is OFF", async () => {
+      vi.stubEnv("BACKOFFICE_KEY", "dev-facilitador")
+      const token = currentToken()!
+      await repo.setEnviarReporteTurno(false)
+      const sender = new LogEmailSender()
+      setEmailSenderForTests(sender)
+
+      const res = await POST(req({ linea: "Línea 3 · Motores" }, token))
+      const body = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(body).toEqual({ ok: true, correo: "omitido" })
+      expect(sender.enviados).toHaveLength(0)
+    })
+
+    it("still returns 200 with correo: 'error' when sending fails -- an email failure must NOT fail the shift", async () => {
+      vi.stubEnv("BACKOFFICE_KEY", "dev-facilitador")
+      const token = currentToken()!
+      const fallando: EmailSender = { send: vi.fn().mockRejectedValue(new Error("SMTP down")) }
+      setEmailSenderForTests(fallando)
+
+      const res = await POST(req({ linea: "Línea 3 · Motores" }, token))
+      const body = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(body).toEqual({ ok: true, correo: "error" })
+    })
   })
 })
