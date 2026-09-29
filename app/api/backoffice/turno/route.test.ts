@@ -139,5 +139,25 @@ describe("POST /api/backoffice/turno", () => {
       expect(res.status).toBe(200)
       expect(body).toEqual({ ok: true, correo: "error" })
     })
+
+    it("E2: resolves within the bound with correo: 'error' when the email sender hangs", async () => {
+      vi.stubEnv("BACKOFFICE_KEY", "dev-facilitador")
+      const token = currentToken()!
+      const hanging: EmailSender = { send: () => new Promise(() => {}) }
+      setEmailSenderForTests(hanging)
+
+      vi.useFakeTimers()
+      try {
+        const resPromise = POST(req({ linea: "Línea 3 · Motores" }, token))
+        await vi.advanceTimersByTimeAsync(10_000)
+        const res = await resPromise
+        const body = await res.json()
+
+        expect(res.status).toBe(200)
+        expect(body).toEqual({ ok: true, correo: "error" })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
   })
 })

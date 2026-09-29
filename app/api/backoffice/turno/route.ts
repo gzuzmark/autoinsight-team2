@@ -6,6 +6,7 @@ import { appBaseUrl, reportRecipients } from "@/lib/backoffice/reporte-config"
 import { construirReporteTurno } from "@/lib/backoffice/reporte-turno"
 import { esLineaDemoConocida, InvalidInputError, type LineaDemoConocida } from "@/lib/domain/floor-repository"
 import { getEmailSender } from "@/lib/email/get-email-sender"
+import { enviarConLimite } from "@/lib/email/with-timeout"
 import { getFloorRepository } from "@/lib/floor-repository"
 
 const NO_STORE = { "Cache-Control": "no-store" }
@@ -78,7 +79,9 @@ async function enviarReporteSiCorresponde(
       alertasAbiertas: reporte.alertasAbiertas,
       appBaseUrl: appBaseUrl(),
     })
-    await getEmailSender().send({ to: reportRecipients(), ...email })
+    // E2: bounded overall so a slow/unreachable SMTP cannot hold this
+    // response open indefinitely -- the shift already happened either way.
+    await enviarConLimite(getEmailSender(), { to: reportRecipients(), ...email })
     return "enviado"
   } catch {
     return "error"

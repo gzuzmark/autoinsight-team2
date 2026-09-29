@@ -26,6 +26,18 @@ export class GmailSmtpSender implements EmailSender {
       port: 465,
       secure: true,
       auth: { user, pass: appPassword },
+      // E2 (RDD review hotfix follow-up): Nodemailer's own defaults run into
+      // multiple minutes, which would hold an interactive "Simular turno" /
+      // "Enviar correo ahora" request open far too long against a
+      // slow/unreachable smtp.gmail.com. connectionTimeout/greetingTimeout
+      // (5s each) cover the TCP connect and the SMTP greeting; socketTimeout
+      // (10s) bounds inactivity during the rest of the exchange (AUTH, DATA).
+      // These are the fast-fail floor; the caller (POST /api/backoffice/turno)
+      // adds its own overall bound on top (see lib/email/with-timeout.ts) for
+      // failure modes these transport-level timeouts do not cover.
+      connectionTimeout: 5_000,
+      greetingTimeout: 5_000,
+      socketTimeout: 10_000,
     })
   }
 
