@@ -3,3 +3,8 @@ pmOnFail: ignore
 minimumReleaseAgeExclude:
   - '@next/*'
   - next
+
+allowBuilds:
+  # core-js is a transitive posthog-js dependency; its install script is a
+  # deprecation-notice printer, not something this app's runtime needs.
+  core-js: false
