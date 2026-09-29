@@ -33,14 +33,17 @@ Open [http://localhost:3100](http://localhost:3100) with your browser to see the
 - `/oficina/alertas/[id]` -- alert investigation screen (static sample data).
 - `/oficina/reportes` -- report list and "Programar reporte" form.
 - `/backoffice` -- facilitator back office for guerrilla-testing sessions:
-  reset the demo (`POST /api/backoffice/reiniciar`) and trigger a shift per
-  line (`POST /api/backoffice/turno`, body `{ "linea": ... }`) against live
-  data; scenarios, session log, script and notes stay inert until their own
-  tasks. Deliberately **not** linked from `/`, `/planta` or `/oficina` --
-  reachable only by typing the URL, and gated server-side behind the
-  `BACKOFFICE_KEY` facilitator key (see "Environment variables" below and
-  "Simulate a shift (demo)"). `lib/backoffice/no-link-guard.test.ts` fails
-  CI if any other page ever links to it.
+  reset the demo (`POST /api/backoffice/reiniciar`), trigger a shift per
+  line (`POST /api/backoffice/turno`, body `{ "linea": ... }`), apply a
+  predefined scenario (`POST /api/backoffice/escenario`), and send report
+  emails (`POST /api/backoffice/correo`, `POST /api/backoffice/configuracion`
+  -- see "Shift report email") against live data; session log, script and
+  notes stay inert until their own tasks. Deliberately **not** linked from
+  `/`, `/planta` or `/oficina` -- reachable only by typing the URL, and
+  gated server-side behind the `BACKOFFICE_KEY` facilitator key (see
+  "Environment variables" below and "Simulate a shift (demo)").
+  `lib/backoffice/no-link-guard.test.ts` fails CI if any other page ever
+  links to it.
 
 The page auto-updates as you edit the file.
 
@@ -76,10 +79,14 @@ selector, office, and floor apps -- office pages are not held to the floor's
 cookie it must show only the key form (no dashboard content); with
 `BACKOFFICE_KEY` set it logs in once and checks the dashboard renders with
 no horizontal overflow or console errors at all four viewports, then logs
-out and confirms it returns to the key form. That scenario is skipped with
-a clear notice when `BACKOFFICE_KEY` is unset in the environment running
-`test:ui` (it shares the login throttle with `/api/sesion`, so it signs in
-only once).
+out and confirms it returns to the key form -- including flipping the G6
+"Enviar reporte al simular turno" switch and one "Enviar correo ahora".
+That scenario is skipped with a clear notice when `BACKOFFICE_KEY` is unset
+in the environment running `test:ui` (it shares the login throttle with
+`/api/sesion`, so it signs in only once). A separate G7a scenario logs into
+`/planta`, triggers a shift through the back-office API, and asserts the
+"N alertas nuevas" strip appears within 20 seconds and is dismissible --
+also skipped without `BACKOFFICE_KEY`.
 
 ## Environment variables
 
@@ -92,6 +99,10 @@ never commit `.env.local` or a real `SUPABASE_SECRET_KEY`.
 | `SUPABASE_URL` | URL | — | Required only when `DATA_SOURCE=supabase`. Read server-side only (D20) — never sent to the browser, never `NEXT_PUBLIC_*`. Local value: `supabase status -o env` after `supabase start`. |
 | `SUPABASE_SECRET_KEY` | secret | — | Required only when `DATA_SOURCE=supabase`; the `service_role`/`sb_secret` key. Same source as above. Never commit a real value. |
 | `BACKOFFICE_KEY` | secret | — | Facilitator key for `/backoffice` (D28 amendment). Unset means the gate is **closed**: the route shows only "Back office deshabilitado: falta BACKOFFICE_KEY", never a bypass. Checked server-side only (constant-time compare, never `NEXT_PUBLIC_*`); the session cookie holds an HMAC-derived token, never the raw key. Pick any local value, e.g. `BACKOFFICE_KEY=dev-facilitador`. |
+| `GMAIL_USER` | Gmail address | — | G6 shift-report email. Required (with `GMAIL_APP_PASSWORD`) to send real emails via Gmail SMTP; when either is missing the app falls back to a log-only sender (never fails the shift) -- see "Shift report email" below. |
+| `GMAIL_APP_PASSWORD` | secret (Gmail app password) | — | G6, paired with `GMAIL_USER`. **Not** the Gmail account password -- an [app password](https://myaccount.google.com/apppasswords) (needs 2-Step Verification enabled on the account). Never commit a real value. |
+| `REPORT_RECIPIENTS` | comma-separated email list | `demo-autoinsight@mailinator.com` | G6. Who receives the shift-report and "Enviar correo ahora" emails. |
+| `APP_BASE_URL` | URL | `https://autoinsight-team2-nine.vercel.app` | G6. Base URL used to build the "Ver el tablero" link in report emails (the route appends `/planta`). |
 
 To run the app against a local Supabase stack instead of mock data:
 
@@ -357,6 +368,57 @@ anything, since that is derived per-session from each participant's own
 login/logout history (`ultima_visita`), which the back office does not
 control. If you want that strip populated for a demo, have the participant
 log out and back in after the scenario runs.
+
+**Note:** a shift triggered directly from Supabase (Table Editor's
+`demo_panel` row, or `select demo_simular_turno_linea(...)` from the SQL
+editor) does **not** send a shift-report email -- only `POST
+/api/backoffice/turno` (the `/backoffice` "Cambiar turno" card) does. The
+RPC itself has no notion of email; the sending only happens in the route
+handler, after a successful `simularTurno()` call.
+
+## Shift report email
+
+After each `/backoffice` "Simular turno" (`POST /api/backoffice/turno`),
+the app can email a "reporte de turno" -- new alerts from that shift by
+severity (ALTA/MEDIA/BAJA), the line's KPI states afterward, its still-open
+alert count, and a link to `/planta`. It is sent through a small port
+(`lib/email/sender.ts`) so the provider can be swapped later without
+touching the route or the report builder:
+
+- **`GmailSmtpSender`** (`lib/email/gmail-sender.ts`, Nodemailer, SMTP over
+  port 465): used when both `GMAIL_USER` and `GMAIL_APP_PASSWORD` are set.
+  To create an app password: enable **2-Step Verification** on the Gmail
+  account, then generate one at
+  [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+  -- use that (not the account's login password) as `GMAIL_APP_PASSWORD`.
+- **`LogEmailSender`** (`lib/email/log-sender.ts`): used whenever either
+  credential is missing (e.g. local `DATA_SOURCE=mock` dev, or CI) and
+  always in unit tests -- it never throws, just logs `email skipped: not
+  configured` and records the message it would have sent.
+
+By default `REPORT_RECIPIENTS` is unset, so every report email goes to the
+public demo inbox
+[demo-autoinsight@mailinator.com](https://www.mailinator.com/v4/public/inboxes.jsp?to=demo-autoinsight)
+-- Mailinator inboxes are public and unauthenticated; do not send anything
+sensitive there. Set `REPORT_RECIPIENTS` to a comma-separated list to
+override it.
+
+Whether a report is sent at all is controlled by the **"Enviar reporte al
+simular turno"** switch in `/backoffice`'s "Comunicaciones" card (default
+ON) -- `POST /api/backoffice/configuracion` flips it, persisted server-side
+(`EstadoDemo#enviarReporteTurno`; a facilitator preference, not demo state,
+so "Reiniciar demo"/scenarios never reset it). A send failure never fails
+the shift itself: `POST /api/backoffice/turno` always responds `200 { ok:
+true, correo }`, where `correo` is `"enviado"` (sent), `"omitido"` (switch
+OFF), or `"error"` (send failed) -- shown inline under the line's "Simular
+turno" button.
+
+The same "Comunicaciones" card also has an **"Enviar correo ahora"**
+button (`POST /api/backoffice/correo`), independent of any shift: it builds
+and sends a current-state snapshot across all three lines (state word +
+open-alert count per line) right away. Unlike the shift-triggered report, a
+send failure here IS reported as an error (this button's only job is to
+send).
 
 ## How KPI tiles change
 
