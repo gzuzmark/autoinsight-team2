@@ -103,7 +103,8 @@ describe("POST /api/backoffice/turno", () => {
       const body = await res.json()
 
       expect(res.status).toBe(200)
-      expect(body).toEqual({ ok: true, correo: "enviado" })
+      expect(body.ok).toBe(true)
+      expect(body.correo).toBe("enviado")
       expect(sender.enviados).toHaveLength(1)
       expect(sender.enviados[0].subject).toContain("Reporte de turno")
     })
@@ -119,7 +120,8 @@ describe("POST /api/backoffice/turno", () => {
       const body = await res.json()
 
       expect(res.status).toBe(200)
-      expect(body).toEqual({ ok: true, correo: "omitido" })
+      expect(body.ok).toBe(true)
+      expect(body.correo).toBe("omitido")
       expect(sender.enviados).toHaveLength(0)
     })
 
@@ -133,7 +135,8 @@ describe("POST /api/backoffice/turno", () => {
       const body = await res.json()
 
       expect(res.status).toBe(200)
-      expect(body).toEqual({ ok: true, correo: "error" })
+      expect(body.ok).toBe(true)
+      expect(body.correo).toBe("error")
     })
 
     it("E1: returns 200 with correo: 'error' when report data is unavailable after a committed shift", async () => {
@@ -155,7 +158,8 @@ describe("POST /api/backoffice/turno", () => {
       const body = await res.json()
 
       expect(res.status).toBe(200)
-      expect(body).toEqual({ ok: true, correo: "error" })
+      expect(body.ok).toBe(true)
+      expect(body.correo).toBe("error")
     })
 
     it("E2: resolves within the bound with correo: 'error' when the email sender hangs", async () => {
@@ -172,7 +176,8 @@ describe("POST /api/backoffice/turno", () => {
         const body = await res.json()
 
         expect(res.status).toBe(200)
-        expect(body).toEqual({ ok: true, correo: "error" })
+        expect(body.ok).toBe(true)
+        expect(body.correo).toBe("error")
       } finally {
         vi.useRealTimers()
       }
@@ -206,9 +211,11 @@ describe("POST /api/backoffice/turno", () => {
       // subscription x 1 ALTA alert.
       expect(sender.enviados).toHaveLength(1)
       expect(sender.enviados[0].payload.title).toContain("Alerta ALTA")
+      const body = await res.json()
+      expect(body.push).toBe("enviado")
     })
 
-    it("a push failure never fails the shift response", async () => {
+    it("a push failure never fails the shift response, and is reported as push: 'error'", async () => {
       vi.stubEnv("BACKOFFICE_KEY", "dev-facilitador")
       const token = currentToken()!
       setPushSenderForTests({ send: vi.fn().mockRejectedValue(new Error("push service down")) })
@@ -228,6 +235,47 @@ describe("POST /api/backoffice/turno", () => {
       expect(res.status).toBe(200)
       const body = await res.json()
       expect(body.ok).toBe(true)
+      expect(body.push).toBe("error")
+    })
+
+    it("I-1: reports push: 'sin_suscripciones' when a new ALTA alert was generated but nothing is subscribed", async () => {
+      vi.stubEnv("BACKOFFICE_KEY", "dev-facilitador")
+      const token = currentToken()!
+      setPushSubscriptionStoreForTests(new InMemoryPushSubscriptionStore())
+
+      vi.spyOn(repo, "simularTurno").mockImplementation(async (linea) => ({
+        linea,
+        nuevasAlertas: [{ id: "n1", severidad: "parar", titulo: "Fuga", estacion: "E1", timestamp: Date.now(), estado: "nueva" }],
+        indicadores: [],
+        alertasAbiertas: 1,
+        datosDisponibles: true,
+      }))
+
+      const res = await POST(req({ linea: "Línea 3 · Motores" }, token))
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.push).toBe("sin_suscripciones")
+    })
+
+    it("I-1: reports push: 'omitido' when the shift generated no ALTA alert", async () => {
+      vi.stubEnv("BACKOFFICE_KEY", "dev-facilitador")
+      const token = currentToken()!
+      const store = new InMemoryPushSubscriptionStore()
+      await store.guardar({ endpoint: "https://fcm.googleapis.com/fcm/send/1", keys: { p256dh: "p", auth: "a" } })
+      setPushSubscriptionStoreForTests(store)
+
+      vi.spyOn(repo, "simularTurno").mockImplementation(async (linea) => ({
+        linea,
+        nuevasAlertas: [{ id: "n2", severidad: "atencion", titulo: "Vibración", estacion: "E4", timestamp: Date.now(), estado: "nueva" }],
+        indicadores: [],
+        alertasAbiertas: 1,
+        datosDisponibles: true,
+      }))
+
+      const res = await POST(req({ linea: "Línea 3 · Motores" }, token))
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.push).toBe("omitido")
     })
   })
 })

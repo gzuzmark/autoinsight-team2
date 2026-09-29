@@ -101,9 +101,11 @@ describe("POST /api/backoffice/escenario", () => {
       const res = await POST(req({ escenario: "linea3-parar-alta" }, token))
       expect(res.status).toBe(200)
       expect(sender.enviados).toHaveLength(1)
+      const body = await res.json()
+      expect(body.push).toBe("enviado")
     })
 
-    it("does not push for a scenario with no open ALTA alert ('todo-ok')", async () => {
+    it("does not push for a scenario with no open ALTA alert ('todo-ok'), and reports push: 'omitido'", async () => {
       vi.stubEnv("BACKOFFICE_KEY", "dev-facilitador")
       const token = currentToken()!
       const sender = new LogPushSender()
@@ -115,6 +117,34 @@ describe("POST /api/backoffice/escenario", () => {
       const res = await POST(req({ escenario: "todo-ok" }, token))
       expect(res.status).toBe(200)
       expect(sender.enviados).toHaveLength(0)
+      const body = await res.json()
+      expect(body.push).toBe("omitido")
+    })
+
+    it("I-1: reports push: 'sin_suscripciones' when the scenario's ALTA alert has no subscribers", async () => {
+      vi.stubEnv("BACKOFFICE_KEY", "dev-facilitador")
+      const token = currentToken()!
+      setPushSubscriptionStoreForTests(new InMemoryPushSubscriptionStore())
+
+      const res = await POST(req({ escenario: "linea3-parar-alta" }, token))
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.push).toBe("sin_suscripciones")
+    })
+
+    it("I-1: reports push: 'error' when every delivery fails, and never fails the scenario response", async () => {
+      vi.stubEnv("BACKOFFICE_KEY", "dev-facilitador")
+      const token = currentToken()!
+      setPushSenderForTests({ send: vi.fn().mockRejectedValue(new Error("push service down")) })
+      const store = new InMemoryPushSubscriptionStore()
+      await store.guardar({ endpoint: "https://fcm.googleapis.com/fcm/send/1", keys: { p256dh: "p", auth: "a" } })
+      setPushSubscriptionStoreForTests(store)
+
+      const res = await POST(req({ escenario: "linea3-parar-alta" }, token))
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.ok).toBe(true)
+      expect(body.push).toBe("error")
     })
   })
 })

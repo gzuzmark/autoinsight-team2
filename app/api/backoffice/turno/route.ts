@@ -11,7 +11,8 @@ import { enviarConLimite } from "@/lib/email/with-timeout"
 import { getFloorRepository } from "@/lib/floor-repository"
 import { getPushSender } from "@/lib/push/get-push-sender"
 import { getPushSubscriptionStore } from "@/lib/push-subscription-store"
-import { notificarAlertasAlta } from "@/lib/push/notify"
+import { notificarAlertasAlta, type ResultadoNotificacion } from "@/lib/push/notify"
+import type { Alerta } from "@/lib/mock-data"
 
 const NO_STORE = { "Cache-Control": "no-store" }
 const UNAUTHORIZED = { error: "Sesión de back office inválida." }
@@ -19,6 +20,21 @@ const DISABLED = { error: "Back office deshabilitado: falta BACKOFFICE_KEY" }
 const INVALID_LINEA = { error: "Línea inválida." }
 
 type CorreoStatus = "enviado" | "omitido" | "error"
+
+/** I-1 (RDD review G7b follow-up, 2026-09-29): mirrors `CorreoStatus` --
+ * same "never fails the caller's own operation, but reports honestly"
+ * shape as the email status above. "omitido" here means the shift
+ * generated no ALTA alert at all (nothing to push, not a failure);
+ * "sin_suscripciones" means an ALTA alert was generated but nothing is
+ * subscribed to receive it. */
+type PushStatus = "enviado" | "sin_suscripciones" | "error" | "omitido"
+
+function estadoPushDesdeResultado(resultado: ResultadoNotificacion): PushStatus {
+  if (resultado.listadoFallo) return "error"
+  if (resultado.intentadas === 0) return "sin_suscripciones"
+  if (resultado.entregadas === 0) return "error"
+  return "enviado"
+}
 
 /** POST /api/backoffice/turno (G2): simulates a shift change on one line
  * (body `{ linea }`, validated against LINEAS_DEMO_CONOCIDAS -- see
@@ -66,11 +82,20 @@ export async function POST(request: Request): Promise<Response> {
   // happened" rationale as the email above. Shifts triggered directly from
   // Supabase (demo_panel/SQL) do NOT go through this route, so they never
   // push -- documented in the README.
-  await notificarAlertasAlta(getPushSender(), getPushSubscriptionStore(), reporte.linea, reporte.nuevasAlertas).catch(
-    (err) => console.error("[push] notificarAlertasAlta failed:", err),
-  )
+  const push = await notificarPushSiCorresponde(reporte.linea, reporte.nuevasAlertas)
 
-  return Response.json({ ok: true, correo }, { headers: NO_STORE })
+  return Response.json({ ok: true, correo, push }, { headers: NO_STORE })
+}
+
+async function notificarPushSiCorresponde(linea: LineaDemoConocida, nuevasAlertas: readonly Alerta[]): Promise<PushStatus> {
+  if (!nuevasAlertas.some((a) => a.severidad === "parar")) return "omitido"
+  try {
+    const resultado = await notificarAlertasAlta(getPushSender(), getPushSubscriptionStore(), linea, nuevasAlertas)
+    return estadoPushDesdeResultado(resultado)
+  } catch (err) {
+    console.error("[push] notificarAlertasAlta failed:", err)
+    return "error"
+  }
 }
 
 async function enviarReporteSiCorresponde(

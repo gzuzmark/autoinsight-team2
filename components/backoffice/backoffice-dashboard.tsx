@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ESTILOS } from "@/lib/status"
 import { ejecutarAccion } from "@/lib/backoffice/acciones"
 import { etiquetaIndicador } from "@/lib/backoffice/indicador-etiquetas"
+import { formatearMensajeEscenario, formatearMensajeTurno } from "@/lib/backoffice/mensajes-turno"
 import { formatearResumenAlertas } from "@/lib/backoffice/resumen-alertas"
 import type { EscenarioId, EstadoDemo, IndicadorEstadoDemo, LineaDemoConocida } from "@/lib/domain/floor-repository"
 import { ESCENARIOS } from "@/lib/domain/floor-repository"
@@ -46,7 +47,9 @@ export function BackofficeDashboard({
     { linea: LineaDemoConocida; texto: string; esError: boolean } | null
   >(null)
   const [escenarioEnCurso, setEscenarioEnCurso] = useState<EscenarioId | null>(null)
-  const [mensajeEscenario, setMensajeEscenario] = useState<{ id: EscenarioId; texto: string } | null>(null)
+  const [mensajeEscenario, setMensajeEscenario] = useState<{ id: EscenarioId; texto: string; esError: boolean } | null>(
+    null,
+  )
   const [cambiandoToggleCorreo, setCambiandoToggleCorreo] = useState(false)
   const [enviandoCorreo, setEnviandoCorreo] = useState(false)
   const [mensajeCorreo, setMensajeCorreo] = useState<{ texto: string; esError: boolean } | null>(null)
@@ -91,14 +94,15 @@ export function BackofficeDashboard({
     })
     setLineaEnCurso(null)
     if (resultado.ok) {
-      // G6: the route reports whether it also sent a shift-report email
-      // (correo: "enviado" | "omitido" | "error") -- shown inline here
-      // regardless, since the shift itself already succeeded either way.
-      const correo = (resultado.data as { correo?: string } | undefined)?.correo
-      if (correo === "enviado") {
-        setMensajeTurno({ linea, texto: "Turno simulado · reporte enviado", esError: false })
-      } else if (correo === "error") {
-        setMensajeTurno({ linea, texto: "Turno simulado · no se pudo enviar el reporte", esError: true })
+      // G6/G7b (I-1, RDD review follow-up): the route reports whether it
+      // also sent a shift-report email (correo) and a push (push) -- shown
+      // inline here regardless, since the shift itself already succeeded
+      // either way.
+      const data = resultado.data as { correo?: string; push?: string } | undefined
+      const texto = formatearMensajeTurno(data?.correo, data?.push)
+      if (texto !== null) {
+        const esError = data?.correo === "error" || data?.push === "error"
+        setMensajeTurno({ linea, texto, esError })
       }
       router.refresh()
       return
@@ -140,8 +144,13 @@ export function BackofficeDashboard({
     const resultado = await ejecutarAccion("/api/backoffice/push", { method: "POST" })
     setDisparandoPush(false)
     if (resultado.ok) {
-      const notificadas = (resultado.data as { notificadas?: number } | undefined)?.notificadas ?? 0
-      setMensajePush({ texto: `Push enviado a ${notificadas} suscripción(es)`, esError: false })
+      // I-1 (RDD review G7b follow-up): a 0-subscriptions run reports a
+      // neutral `mensaje` (never phrased as "Push enviado a 0…", which
+      // read like an odd success) -- ejecutarAccion already turns a 502
+      // total-failure into the `resultado.ok === false` branch below.
+      const data = resultado.data as { notificadas?: number; mensaje?: string } | undefined
+      const texto = data?.mensaje ?? `Push enviado a ${data?.notificadas ?? 0} suscripción(es)`
+      setMensajePush({ texto, esError: false })
       return
     }
     setMensajePush({ texto: resultado.error, esError: true })
@@ -158,10 +167,18 @@ export function BackofficeDashboard({
     })
     setEscenarioEnCurso(null)
     if (resultado.ok) {
+      // I-1 (RDD review G7b follow-up): the route reports the push outcome
+      // (push) -- shown inline here regardless, since the scenario itself
+      // already applied either way.
+      const push = (resultado.data as { push?: string } | undefined)?.push
+      const texto = formatearMensajeEscenario(push)
+      if (texto !== null) {
+        setMensajeEscenario({ id, texto, esError: push === "error" })
+      }
       router.refresh()
       return
     }
-    setMensajeEscenario({ id, texto: resultado.error })
+    setMensajeEscenario({ id, texto: resultado.error, esError: true })
   }
 
   return (
@@ -472,7 +489,7 @@ function EscenariosCard({
 }: {
   escenarioActivo: EscenarioId | null
   escenarioEnCurso: EscenarioId | null
-  mensaje: { id: EscenarioId; texto: string } | null
+  mensaje: { id: EscenarioId; texto: string; esError: boolean } | null
   onAplicarEscenario: (id: EscenarioId) => void
 }) {
   return (
@@ -503,7 +520,10 @@ function EscenariosCard({
                 )}
               </Button>
               {mensaje?.id === escenario.id && (
-                <p role="alert" className="text-xs font-medium text-destructive">
+                <p
+                  role={mensaje.esError ? "alert" : "status"}
+                  className={`text-xs font-medium ${mensaje.esError ? "text-destructive" : "text-emerald-700"}`}
+                >
                   {mensaje.texto}
                 </p>
               )}

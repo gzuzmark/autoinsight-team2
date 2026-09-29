@@ -7,12 +7,25 @@ import { esEscenarioId, InvalidInputError, type EscenarioId } from "@/lib/domain
 import { getFloorRepository } from "@/lib/floor-repository"
 import { getPushSender } from "@/lib/push/get-push-sender"
 import { getPushSubscriptionStore } from "@/lib/push-subscription-store"
-import { notificarAlertasAlta } from "@/lib/push/notify"
+import { notificarAlertasAlta, type ResultadoNotificacion } from "@/lib/push/notify"
 
 const NO_STORE = { "Cache-Control": "no-store" }
 const UNAUTHORIZED = { error: "Sesión de back office inválida." }
 const DISABLED = { error: "Back office deshabilitado: falta BACKOFFICE_KEY" }
 const INVALID_ESCENARIO = { error: "Escenario inválido." }
+
+/** I-1 (RDD review G7b follow-up, 2026-09-29): same shape/rationale as the
+ * turno route's own `PushStatus` -- never fails this route's own
+ * operation, but reports the push outcome honestly instead of always
+ * silently swallowing it. */
+type PushStatus = "enviado" | "sin_suscripciones" | "error" | "omitido"
+
+function estadoPushDesdeResultado(resultado: ResultadoNotificacion): PushStatus {
+  if (resultado.listadoFallo) return "error"
+  if (resultado.intentadas === 0) return "sin_suscripciones"
+  if (resultado.entregadas === 0) return "error"
+  return "enviado"
+}
 
 /** POST /api/backoffice/escenario (G3): applies a predefined scenario (body
  * `{ escenario }`, validated against ESCENARIO_IDS -- see
@@ -48,18 +61,31 @@ export async function POST(request: Request): Promise<Response> {
   // "linea3-parar-alta" ever produces an open ALTA alert, so the new-alert
   // list this route pushes for is exactly that one alert when it is the
   // scenario just applied. Bounded/never-throwing, same rationale as the
-  // turno route's own push trigger.
-  await notificarAlertasAltaParaEscenario(repo).catch((err) =>
-    console.error("[push] notificarAlertasAlta (escenario) failed:", err),
-  )
+  // turno route's own push trigger; I-1 (RDD review G7b follow-up,
+  // 2026-09-29) reports the outcome instead of always swallowing it.
+  const push = await notificarAlertasAltaParaEscenario(repo)
 
-  return Response.json({ ok: true }, { headers: NO_STORE })
+  return Response.json({ ok: true, push }, { headers: NO_STORE })
 }
 
-async function notificarAlertasAltaParaEscenario(repo: ReturnType<typeof getFloorRepository>): Promise<void> {
-  const encontrada = await repo.alertaAltaMasReciente()
-  if (!encontrada) return
-  await notificarAlertasAlta(getPushSender(), getPushSubscriptionStore(), encontrada.linea, [encontrada.alerta])
+async function notificarAlertasAltaParaEscenario(repo: ReturnType<typeof getFloorRepository>): Promise<PushStatus> {
+  let encontrada
+  try {
+    encontrada = await repo.alertaAltaMasReciente()
+  } catch (err) {
+    console.error("[push] alertaAltaMasReciente (escenario) failed:", err)
+    return "error"
+  }
+  if (!encontrada) return "omitido"
+  try {
+    const resultado = await notificarAlertasAlta(getPushSender(), getPushSubscriptionStore(), encontrada.linea, [
+      encontrada.alerta,
+    ])
+    return estadoPushDesdeResultado(resultado)
+  } catch (err) {
+    console.error("[push] notificarAlertasAlta (escenario) failed:", err)
+    return "error"
+  }
 }
 
 async function parseEscenario(request: Request): Promise<EscenarioId | null> {
