@@ -6,6 +6,10 @@ import { BACKOFFICE_COOKIE_NAME } from "@/lib/api/backoffice-cookie"
 import { resetEmailSenderForTests, setEmailSenderForTests } from "@/lib/email/get-email-sender"
 import { LogEmailSender } from "@/lib/email/log-sender"
 import type { EmailSender } from "@/lib/email/sender"
+import { resetPushSenderForTests, setPushSenderForTests } from "@/lib/push/get-push-sender"
+import { LogPushSender } from "@/lib/push/log-sender"
+import { setPushSubscriptionStoreForTests } from "@/lib/push-subscription-store"
+import { InMemoryPushSubscriptionStore } from "@/lib/push/in-memory-subscription-store"
 import { POST } from "./route"
 
 function req(body: unknown, cookie?: string): Request {
@@ -29,6 +33,7 @@ describe("POST /api/backoffice/turno", () => {
   afterEach(() => {
     vi.unstubAllEnvs()
     resetEmailSenderForTests()
+    resetPushSenderForTests()
   })
 
   it("fails closed with 503 when BACKOFFICE_KEY is unset", async () => {
@@ -171,6 +176,58 @@ describe("POST /api/backoffice/turno", () => {
       } finally {
         vi.useRealTimers()
       }
+    })
+  })
+
+  describe("G7b: push for new ALTA alerts", () => {
+    it("pushes every stored subscription once per new ALTA alert this shift generated", async () => {
+      vi.stubEnv("BACKOFFICE_KEY", "dev-facilitador")
+      const token = currentToken()!
+      const sender = new LogPushSender()
+      setPushSenderForTests(sender)
+      const store = new InMemoryPushSubscriptionStore()
+      await store.guardar({ endpoint: "https://push.example.com/1", keys: { p256dh: "p", auth: "a" } })
+      setPushSubscriptionStoreForTests(store)
+
+      vi.spyOn(repo, "simularTurno").mockImplementation(async (linea) => ({
+        linea,
+        nuevasAlertas: [
+          { id: "n1", severidad: "parar", titulo: "Fuga", estacion: "E1", timestamp: Date.now(), estado: "nueva" },
+          { id: "n2", severidad: "atencion", titulo: "Vibración", estacion: "E4", timestamp: Date.now(), estado: "nueva" },
+        ],
+        indicadores: [],
+        alertasAbiertas: 2,
+        datosDisponibles: true,
+      }))
+
+      const res = await POST(req({ linea: "Línea 3 · Motores" }, token))
+      expect(res.status).toBe(200)
+      // Only the ALTA (severidad "parar") alert triggers a push -- 1
+      // subscription x 1 ALTA alert.
+      expect(sender.enviados).toHaveLength(1)
+      expect(sender.enviados[0].payload.title).toContain("Alerta ALTA")
+    })
+
+    it("a push failure never fails the shift response", async () => {
+      vi.stubEnv("BACKOFFICE_KEY", "dev-facilitador")
+      const token = currentToken()!
+      setPushSenderForTests({ send: vi.fn().mockRejectedValue(new Error("push service down")) })
+      const store = new InMemoryPushSubscriptionStore()
+      await store.guardar({ endpoint: "https://push.example.com/1", keys: { p256dh: "p", auth: "a" } })
+      setPushSubscriptionStoreForTests(store)
+
+      vi.spyOn(repo, "simularTurno").mockImplementation(async (linea) => ({
+        linea,
+        nuevasAlertas: [{ id: "n1", severidad: "parar", titulo: "Fuga", estacion: "E1", timestamp: Date.now(), estado: "nueva" }],
+        indicadores: [],
+        alertasAbiertas: 1,
+        datosDisponibles: true,
+      }))
+
+      const res = await POST(req({ linea: "Línea 3 · Motores" }, token))
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.ok).toBe(true)
     })
   })
 })

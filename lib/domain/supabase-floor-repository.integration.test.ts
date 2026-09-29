@@ -150,6 +150,15 @@ describe.skipIf(!canRun)("SupabaseFloorRepository (integration, local stack)", (
     // Leave the demo state clean for anything that runs after this file.
     await repo.reiniciarDemo()
   })
+
+  it("alertaAltaMasReciente finds a real open ALTA alert after the linea3-parar-alta scenario", async () => {
+    await repo.aplicarEscenario("linea3-parar-alta")
+    const resultado = await repo.alertaAltaMasReciente()
+    expect(resultado).not.toBeNull()
+    expect(resultado!.linea).toBe("Línea 3 · Motores")
+    expect(resultado!.alerta.severidad).toBe("parar")
+    await repo.reiniciarDemo()
+  })
 })
 
 if (!canRun) {

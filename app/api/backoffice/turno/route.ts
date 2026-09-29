@@ -9,6 +9,9 @@ import { esLineaDemoConocida, InvalidInputError, type LineaDemoConocida } from "
 import { getEmailSender } from "@/lib/email/get-email-sender"
 import { enviarConLimite } from "@/lib/email/with-timeout"
 import { getFloorRepository } from "@/lib/floor-repository"
+import { getPushSender } from "@/lib/push/get-push-sender"
+import { getPushSubscriptionStore } from "@/lib/push-subscription-store"
+import { notificarAlertasAlta } from "@/lib/push/notify"
 
 const NO_STORE = { "Cache-Control": "no-store" }
 const UNAUTHORIZED = { error: "Sesión de back office inválida." }
@@ -56,6 +59,16 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const correo = await enviarReporteSiCorresponde(repo, reporte)
+
+  // G7b: push every stored office subscription for each NEW ALTA alert this
+  // shift generated. Bounded and never throws (see notificarAlertasAlta's
+  // doc) -- a push failure must not fail the shift response, same "already
+  // happened" rationale as the email above. Shifts triggered directly from
+  // Supabase (demo_panel/SQL) do NOT go through this route, so they never
+  // push -- documented in the README.
+  await notificarAlertasAlta(getPushSender(), getPushSubscriptionStore(), reporte.linea, reporte.nuevasAlertas).catch(
+    (err) => console.error("[push] notificarAlertasAlta failed:", err),
+  )
 
   return Response.json({ ok: true, correo }, { headers: NO_STORE })
 }

@@ -275,4 +275,9 @@ export interface FloorRepository {
    * sample alerts (`lib/oficina/mock-data.ts`) fall back to those before
    * calling `notFound()`, never on a repository throw. */
   obtenerAlerta(id: string): Promise<AlertaDetalle | null>
+
+  /** G7b: back office "Disparar push" -- the most recent still-open
+   * (severidad "parar"/ALTA) alert across every known line, or null when
+   * none is open. */
+  alertaAltaMasReciente(): Promise<{ linea: LineaDemoConocida; alerta: Alerta } | null>
 }

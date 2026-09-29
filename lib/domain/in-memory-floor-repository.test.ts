@@ -478,4 +478,32 @@ describe("InMemoryFloorRepository", () => {
       expect(detalle!.titulo).toBe(generada.titulo)
     })
   })
+
+  describe("alertaAltaMasReciente (G7b)", () => {
+    it("returns the seeded Línea 3 ALTA alert when it is the only one open", async () => {
+      const resultado = await repo.alertaAltaMasReciente()
+      expect(resultado).not.toBeNull()
+      expect(resultado!.linea).toBe(LINEA_ACTIVA)
+      expect(resultado!.alerta.severidad).toBe("parar")
+    })
+
+    it("returns null when no ALTA alert is open anywhere", async () => {
+      await repo.aplicarEscenario("todo-ok")
+      expect(await repo.alertaAltaMasReciente()).toBeNull()
+    })
+
+    it("picks the most recently created ALTA alert across lines", async () => {
+      await repo.aplicarEscenario("linea3-parar-alta")
+      const antes = await repo.alertaAltaMasReciente()
+      expect(antes!.linea).toBe(LINEA_ACTIVA)
+
+      const otra = await repo.simularTurno("Línea 1 · Chasis")
+      const nuevaAlta = otra.nuevasAlertas.find((a) => a.severidad === "parar")
+      if (nuevaAlta) {
+        const despues = await repo.alertaAltaMasReciente()
+        expect(despues!.linea).toBe("Línea 1 · Chasis")
+        expect(despues!.alerta.id).toBe(nuevaAlta.id)
+      }
+    })
+  })
 })

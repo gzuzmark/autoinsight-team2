@@ -407,6 +407,20 @@ export class InMemoryFloorRepository implements FloorRepository {
     return null
   }
 
+  async alertaAltaMasReciente(): Promise<{ linea: LineaDemoConocida; alerta: Alerta } | null> {
+    let mejor: { linea: LineaDemoConocida; alerta: Alerta } | null = null
+    for (const nombre of LINEAS_DEMO_CONOCIDAS) {
+      const estado = this.lineasEstado.get(nombre)!
+      for (const alerta of activeAlerts(estado.alertas)) {
+        if (alerta.severidad !== "parar") continue
+        if (!mejor || alerta.timestamp > mejor.alerta.timestamp) {
+          mejor = { linea: nombre, alerta }
+        }
+      }
+    }
+    return mejor
+  }
+
   private lineaActiva(): LineaEstado {
     return this.lineasEstado.get(LINEA.nombre)!
   }

@@ -239,6 +239,41 @@ export class SupabaseFloorRepository implements FloorRepository {
     }
   }
 
+  async alertaAltaMasReciente(): Promise<{ linea: LineaDemoConocida; alerta: Alerta } | null> {
+    const { data, error } = await this.client
+      .from("alertas")
+      .select("id,severidad,titulo,estacion_id,creada_en,lineas(nombre),estaciones(nombre)")
+      .eq("severidad", "parar")
+      .eq("estado", "nueva")
+      .order("creada_en", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (error) throw this.mapError(error)
+    if (!data) return null
+    const row = data as unknown as {
+      id: string
+      severidad: Severidad
+      titulo: string
+      creada_en: string
+      lineas: { nombre: string } | null
+      estaciones: { nombre: string } | null
+    }
+    const linea = row.lineas?.nombre
+    if (!esLineaDemoConocida(linea)) return null
+
+    return {
+      linea,
+      alerta: {
+        id: row.id,
+        severidad: row.severidad,
+        titulo: row.titulo,
+        estacion: row.estaciones?.nombre ?? "",
+        timestamp: new Date(row.creada_en).getTime(),
+        estado: "nueva",
+      },
+    }
+  }
+
   private mapTablero(row: TableroRow): Tablero {
     return {
       planta: { nombre: row.planta.nombre },
