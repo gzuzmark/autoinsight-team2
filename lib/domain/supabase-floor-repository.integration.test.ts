@@ -85,7 +85,17 @@ describe.skipIf(!canRun)("SupabaseFloorRepository (integration, local stack)", (
     await expect(repo.reiniciarDemo()).resolves.toBeUndefined()
 
     for (const linea of ["Línea 1 · Chasis", "Línea 2 · Pintura", "Línea 3 · Motores"] as const) {
-      await expect(repo.simularTurno(linea)).resolves.toBeUndefined()
+      // G6: simularTurno now resolves to the shift-report data, not void --
+      // exercised over a real PostgREST round-trip (the RPC's own returned
+      // alerts, plus the two direct public.indicadores/alertas reads).
+      await expect(repo.simularTurno(linea)).resolves.toEqual(
+        expect.objectContaining({
+          linea,
+          nuevasAlertas: expect.any(Array),
+          indicadores: expect.any(Array),
+          alertasAbiertas: expect.any(Number),
+        }),
+      )
     }
 
     for (const escenario of ["todo-ok", "linea3-parar-alta", "muchas-media", "recuperacion"] as const) {
@@ -93,8 +103,16 @@ describe.skipIf(!canRun)("SupabaseFloorRepository (integration, local stack)", (
     }
 
     await expect(repo.estadoDemo()).resolves.toEqual(
-      expect.objectContaining({ lineas: expect.any(Array) }),
+      expect.objectContaining({ lineas: expect.any(Array), enviarReporteTurno: expect.any(Boolean) }),
     )
+
+    // G6: the toggle RPCs run over PostgREST too (same safeupdate concern:
+    // the setter is an UPDATE on the demo_configuracion singleton).
+    await expect(repo.setEnviarReporteTurno(false)).resolves.toBeUndefined()
+    await expect(repo.estadoDemo()).resolves.toEqual(
+      expect.objectContaining({ enviarReporteTurno: false }),
+    )
+    await repo.setEnviarReporteTurno(true)
 
     // Leave the demo state clean for anything that runs after this file.
     await repo.reiniciarDemo()
