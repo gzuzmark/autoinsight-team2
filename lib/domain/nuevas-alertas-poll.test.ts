@@ -97,4 +97,34 @@ describe("procesarDescarteNuevasAlertas (K-1: pure decision, called exactly once
     expect(primera.cantidad).toBe(segunda.cantidad)
     expect(primera.cantidad).toBe(1)
   })
+
+  it("L-1: derives its next estado entirely from the `estado` argument, so applying it as a React functional setState updater on top of a poll queued in the same batch never loses that poll's additions", () => {
+    // Simulates the exact race the L-1 fix protects against: a poll (via
+    // aplicarTablero's own functional setState) and a dismiss click land in
+    // the same React batch. React applies queued updates for one state
+    // variable in order, so the dismiss's functional updater must run
+    // against the poll's OUTPUT (`conPollEncolado`), never against an
+    // earlier snapshot captured before the poll was processed.
+    let estado = registrarPoll(ESTADO_INICIAL_NUEVAS_ALERTAS, [alerta("a")])
+    estado = registrarPoll(estado, [alerta("a"), alerta("b", 100)]) // rendered: pendientes = [b]
+
+    // A poll that lands in the SAME batch as the dismiss -- not yet
+    // reflected in any ref/snapshot the caller may have read before this
+    // batch started.
+    const conPollEncolado = registrarPoll(estado, [alerta("a"), alerta("b", 100), alerta("c", 200)])
+
+    // The fix: apply the dismiss reducer to the queued poll's OUTPUT (what
+    // React hands a functional updater), not to `estado` (a pre-batch
+    // snapshot).
+    const resultado = procesarDescarteNuevasAlertas(conPollEncolado, "P3")
+
+    expect(resultado.estado.pendientes).toEqual([])
+    // The poll's vistos additions ("c") survive the dismiss.
+    expect(resultado.estado.vistos).toEqual(new Set(["a", "b", "c"]))
+
+    // A later poll must not re-report "c" as new -- proving it was really
+    // folded into `vistos`, not just absent from `pendientes` by accident.
+    const siguientePoll = registrarPoll(resultado.estado, [alerta("a"), alerta("b", 100), alerta("c", 200)])
+    expect(siguientePoll.pendientes).toEqual([])
+  })
 })

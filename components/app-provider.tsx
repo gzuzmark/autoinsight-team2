@@ -234,22 +234,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     )
   }, [])
 
-  // K-1: the decision (procesarDescarteNuevasAlertas) runs once as a plain
-  // function call, and capturarEvento is fired here -- outside any setState
-  // updater -- so React cannot invoke this side effect more than once for
-  // a single dismissal (StrictMode/a replayed render only re-invokes
-  // updater functions, not this callback body).
+  // K-1: the PostHog capture (cantidad, from the latest COMMITTED state via
+  // nuevasAlertasEstadoRef) runs once as a plain function call, here --
+  // outside any setState updater -- so React cannot invoke this side effect
+  // more than once for a single dismissal (StrictMode/a replayed render
+  // only re-invokes updater functions, not this callback body).
+  //
+  // L-1 fix: the state UPDATE, unlike the capture above, must use the
+  // functional setState form (`(prev) => ...`), not a value computed from
+  // nuevasAlertasEstadoRef.current. A poll's own update
+  // (`setNuevasAlertasEstado((prev) => registrarPoll(prev, ...))` in
+  // aplicarTablero above) can be queued in the same React batch as this
+  // dismiss -- e.g. the 15s poller's onTick and a click both landing in one
+  // event-loop turn. React applies queued updates to a state variable in
+  // order; a plain (non-functional) `setNuevasAlertasEstado(nuevoEstado)`
+  // here would overwrite that poll's result with a value derived from a
+  // snapshot taken BEFORE it, losing the poll's new `vistos` additions (an
+  // alert the poll just learned about would be reported as "new" again on
+  // the next poll) and any alerts it had just added to `pendientes`. The
+  // functional form always applies on top of whatever the previous queued
+  // update produced, so no poll update can ever be clobbered.
   const descartarNuevasAlertasPoll = useCallback(() => {
-    const { estado: nuevoEstado, cantidad } = procesarDescarteNuevasAlertas(
-      nuevasAlertasEstadoRef.current,
-      participanteIdRef.current,
-    )
+    const { cantidad } = procesarDescarteNuevasAlertas(nuevasAlertasEstadoRef.current, participanteIdRef.current)
     if (cantidad !== null && participanteIdRef.current) {
       capturarEvento(
         eventoNuevasAlertasVistas({ participante: participanteIdRef.current, vista: "planta" }, { cantidad }),
       )
     }
-    setNuevasAlertasEstado(nuevoEstado)
+    setNuevasAlertasEstado((prev) => procesarDescarteNuevasAlertas(prev, participanteIdRef.current).estado)
   }, [])
 
   // D29/E4: auto-refresh the tablero every 15s while logged in and the page
