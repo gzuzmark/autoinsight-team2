@@ -2,15 +2,10 @@
  * Static sample data for the /backoffice facilitator dashboard. G2 wired
  * "Estado de la demo" and "Cambiar turno" to live FloorRepository data
  * (see app/backoffice/page.tsx / components/backoffice/backoffice-dashboard.tsx)
- * -- everything below stays inert until its own task (G3 Escenarios, G6/G7
- * Comunicaciones, G4 Registro, G5 Guion y notas / Participante).
+ * -- everything below stays inert until its own task (G5 Guion y notas).
  */
 
 export const PLANTA_NOMBRE = "Planta Norte"
-
-/** G2: "Participante actual" stays a placeholder until G4/G5 wire real
- * session-log participant tracking; "Nuevo participante" stays inert. */
-export const PARTICIPANTE_ACTUAL = "P3"
 
 // G3: the real scenario catalog (ids + labels) now lives in
 // lib/domain/escenarios.ts, shared with the Supabase migration/route --
@@ -20,21 +15,15 @@ export const PARTICIPANTE_ACTUAL = "P3"
 // toggle are wired to live data/routes directly in
 // backoffice-dashboard.tsx (EstadoDemo#enviarReporteTurno,
 // POST /api/backoffice/correo, POST /api/backoffice/configuracion).
-// G7b: "Disparar push" is wired too (POST /api/backoffice/push) -- no more
-// inert Comunicaciones actions remain.
+// G7b: "Disparar push" is wired too (POST /api/backoffice/push).
 
-export type EventoSesion = {
-  hora: string
-  participante: string
-  evento: string
-  tiempoDesdeMostrada: string
-}
-
-export const REGISTRO_SESION: EventoSesion[] = [
-  { hora: "08:12:03", participante: "P3", evento: "Alerta mostrada", tiempoDesdeMostrada: "—" },
-  { hora: "08:12:07", participante: "P3", evento: "Abierta", tiempoDesdeMostrada: "4,2 s" },
-  { hora: "08:12:22", participante: "P3", evento: "Atendida", tiempoDesdeMostrada: "19,1 s" },
-]
+// G8 (G4 folded in, "Decisions" 2026-09-28): "Participante actual" and
+// "Nuevo participante" are wired to live data/routes directly in
+// backoffice-dashboard.tsx (EstadoDemo#participanteActual,
+// POST /api/backoffice/participante). "Registro de la sesión" no longer
+// holds sample rows -- session events go ONLY to PostHog now (no Supabase
+// event table, no CSV export); the card is a link to
+// NEXT_PUBLIC_POSTHOG_PROJECT_URL.
 
 export const GUION_PASOS: string[] = [
   "¿Cómo está tu línea?",

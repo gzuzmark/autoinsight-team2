@@ -3,9 +3,8 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ESTILOS } from "@/lib/status"
 import { ejecutarAccion } from "@/lib/backoffice/acciones"
 import { etiquetaIndicador } from "@/lib/backoffice/indicador-etiquetas"
@@ -14,7 +13,7 @@ import { formatearResumenAlertas } from "@/lib/backoffice/resumen-alertas"
 import type { EscenarioId, EstadoDemo, IndicadorEstadoDemo, LineaDemoConocida } from "@/lib/domain/floor-repository"
 import { ESCENARIOS } from "@/lib/domain/floor-repository"
 import { formatearHora, type Severidad } from "@/lib/mock-data"
-import { GUION_PASOS, PARTICIPANTE_ACTUAL, PLANTA_NOMBRE, REGISTRO_SESION } from "@/lib/backoffice/sample-data"
+import { GUION_PASOS, PLANTA_NOMBRE } from "@/lib/backoffice/sample-data"
 
 // G1: static back-office layout (odd/tasks/assets/shot-backoffice.png).
 // G2: "Estado de la demo" and "Cambiar turno" read/act on live
@@ -23,8 +22,8 @@ import { GUION_PASOS, PARTICIPANTE_ACTUAL, PLANTA_NOMBRE, REGISTRO_SESION } from
 // Every other action button stays inert ("Disponible en G4"/"Disponible en
 // G5") until its own task.
 
-const INERT_TITLE_REGISTRO = "Disponible en G4"
 const INERT_TITLE_NOTAS = "Disponible en G5"
+const POSTHOG_PROJECT_URL = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_URL
 
 export function BackofficeDashboard({
   estadoDemo,
@@ -55,6 +54,8 @@ export function BackofficeDashboard({
   const [mensajeCorreo, setMensajeCorreo] = useState<{ texto: string; esError: boolean } | null>(null)
   const [disparandoPush, setDisparandoPush] = useState(false)
   const [mensajePush, setMensajePush] = useState<{ texto: string; esError: boolean } | null>(null)
+  const [nuevoParticipanteEnCurso, setNuevoParticipanteEnCurso] = useState(false)
+  const [mensajeNuevoParticipante, setMensajeNuevoParticipante] = useState<string | null>(null)
 
   async function onSalir() {
     if (saliendo) return
@@ -81,6 +82,19 @@ export function BackofficeDashboard({
       return
     }
     setMensajeReinicio(resultado.error)
+  }
+
+  async function onNuevoParticipante() {
+    if (nuevoParticipanteEnCurso) return
+    setNuevoParticipanteEnCurso(true)
+    setMensajeNuevoParticipante(null)
+    const resultado = await ejecutarAccion("/api/backoffice/participante", { method: "POST" })
+    setNuevoParticipanteEnCurso(false)
+    if (resultado.ok) {
+      router.refresh()
+      return
+    }
+    setMensajeNuevoParticipante(resultado.error)
   }
 
   async function onSimularTurno(linea: LineaDemoConocida) {
@@ -208,6 +222,9 @@ export function BackofficeDashboard({
           reiniciando={reiniciando}
           mensaje={mensajeReinicio}
           onReiniciar={onReiniciar}
+          nuevoParticipanteEnCurso={nuevoParticipanteEnCurso}
+          mensajeNuevoParticipante={mensajeNuevoParticipante}
+          onNuevoParticipante={onNuevoParticipante}
         />
         <CambiarTurnoCard
           estadoDemo={estadoDemo}
@@ -295,6 +312,9 @@ function EstadoDemoCard({
   reiniciando,
   mensaje,
   onReiniciar,
+  nuevoParticipanteEnCurso,
+  mensajeNuevoParticipante,
+  onNuevoParticipante,
 }: {
   estadoDemo: EstadoDemo
   error: string | null
@@ -303,6 +323,9 @@ function EstadoDemoCard({
   reiniciando: boolean
   mensaje: string | null
   onReiniciar: () => void
+  nuevoParticipanteEnCurso: boolean
+  mensajeNuevoParticipante: string | null
+  onNuevoParticipante: () => void
 }) {
   // D3: while data is unavailable, the summary numbers below must not lie
   // either (0 open alerts would read as "all clear") -- "—" like a never-
@@ -413,12 +436,19 @@ function EstadoDemoCard({
         <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
           <div>
             <p className="text-xs text-neutral-500">Participante actual</p>
-            <p className="text-sm font-bold">{PARTICIPANTE_ACTUAL}</p>
+            <p className="text-sm font-bold">
+              {estadoDemo.participanteActual !== null ? `P${estadoDemo.participanteActual}` : "—"}
+            </p>
           </div>
-          <Button variant="secondary" size="sm" disabled title={INERT_TITLE_REGISTRO}>
-            Nuevo participante
+          <Button variant="secondary" size="sm" onClick={onNuevoParticipante} disabled={nuevoParticipanteEnCurso}>
+            {nuevoParticipanteEnCurso ? "Reiniciando…" : "Nuevo participante"}
           </Button>
         </div>
+        {mensajeNuevoParticipante && (
+          <p role="alert" className="text-xs font-medium text-destructive">
+            {mensajeNuevoParticipante}
+          </p>
+        )}
         <p className="text-xs text-neutral-500">Reinicia la demo y empieza un registro nuevo.</p>
       </CardContent>
     </Card>
@@ -618,39 +648,36 @@ function ComunicacionesCard({
   )
 }
 
+// G8 (G4 folded in, "Decisions" 2026-09-28): session events go ONLY to
+// PostHog now -- no Supabase event table, no local sample rows, no CSV
+// export (PostHog itself exports). This card is now a single link to the
+// PostHog project; a missing NEXT_PUBLIC_POSTHOG_PROJECT_URL disables the
+// button with an honest reason instead of linking nowhere.
 function RegistroSesionCard() {
   return (
     <Card>
-      <CardHeader className="flex-row items-center justify-between">
-        <div className="flex flex-col gap-1">
-          <CardTitle>Registro de la sesión</CardTitle>
-          <CardDescription>Eventos capturados durante la prueba</CardDescription>
-        </div>
-        <Button variant="secondary" size="sm" disabled title={INERT_TITLE_REGISTRO}>
-          Descargar CSV
-        </Button>
+      <CardHeader>
+        <CardTitle>Registro de la sesión</CardTitle>
+        <CardDescription>Eventos capturados durante la prueba (PostHog)</CardDescription>
       </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Hora</TableHead>
-              <TableHead>Participante</TableHead>
-              <TableHead>Evento</TableHead>
-              <TableHead>Tiempo desde mostrada</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {REGISTRO_SESION.map((evento, i) => (
-              <TableRow key={i}>
-                <TableCell>{evento.hora}</TableCell>
-                <TableCell>{evento.participante}</TableCell>
-                <TableCell>{evento.evento}</TableCell>
-                <TableCell>{evento.tiempoDesdeMostrada}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+      <CardContent className="flex flex-col gap-2">
+        {POSTHOG_PROJECT_URL ? (
+          <a
+            href={POSTHOG_PROJECT_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={buttonVariants({ className: "w-full" })}
+          >
+            Ver sesiones en PostHog
+          </a>
+        ) : (
+          <Button className="w-full" disabled title="Configura NEXT_PUBLIC_POSTHOG_PROJECT_URL">
+            Ver sesiones en PostHog
+          </Button>
+        )}
+        <p className="text-xs text-neutral-500">
+          Filtra por participante ("P&lt;n&gt;") en PostHog para ver la sesión de una prueba puntual.
+        </p>
       </CardContent>
     </Card>
   )
