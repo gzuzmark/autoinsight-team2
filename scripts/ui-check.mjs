@@ -530,6 +530,20 @@ async function runOfficeScenariosAtViewport(browser, viewport, allViolations) {
     // console error, not that it becomes "activadas").
     await page.getByTestId("push-toggle").waitFor({ state: "visible" })
 
+    // G9: the notification bell renders, opens on click, and lists at
+    // least an empty state or the seeded ALTA alert -- at every viewport.
+    const campana = page.getByTestId("notification-bell")
+    await campana.waitFor({ state: "visible" })
+    await campana.click()
+    const panel = page.getByTestId("notification-bell-panel")
+    await panel.waitFor({ state: "visible" })
+    const tieneAlerta = await page.getByText("Sin notificaciones").isVisible().catch(() => false)
+    if (!tieneAlerta) {
+      await panel.locator("a").first().waitFor({ state: "visible" })
+    }
+    await page.keyboard.press("Escape")
+    await panel.waitFor({ state: "hidden" })
+
     await page.goto(`${BASE_URL}/oficina/alertas/${SAMPLE_ALERT_ID}`, { waitUntil: "networkidle" })
     await page.getByRole("heading", { name: "Investigación de alerta" }).waitFor({ state: "visible" })
     await checkOverflow("oficina alerta")

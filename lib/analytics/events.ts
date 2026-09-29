@@ -104,3 +104,16 @@ export function eventoPushCambiado(base: EventoBase, activo: boolean): EventoAna
 export function eventoNotificacionClick(base: EventoBase, datos: { alertaId: string }): EventoAnalitica {
   return evento("notificacion_click", base, { alerta_id: datos.alertaId })
 }
+
+/** G9: the office notification bell dropdown was opened. */
+export function eventoOficinaCampanaAbierta(base: EventoBase): EventoAnalitica {
+  return evento("oficina_campana_abierta", base, {})
+}
+
+/** G9: a notification was clicked inside the bell dropdown. `desde` is
+ * always "campana" here (the bell is the only source of this event) --
+ * kept as an explicit field, matching the brief, rather than a hardcoded
+ * assumption at every call site. */
+export function eventoOficinaNotificacionClick(base: EventoBase, datos: { alertaId: string }): EventoAnalitica {
+  return evento("oficina_notificacion_click", base, { alerta_id: datos.alertaId, desde: "campana" })
+}

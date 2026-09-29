@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { Avatar } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
+import { NotificationBell } from "@/components/oficina/notification-bell"
 import { PushToggle } from "@/components/oficina/push-toggle"
 
 // The office desk shell (O2): sidebar + header, shared by every /oficina/**
@@ -96,6 +97,7 @@ export function OfficeShell({
               <Search className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
               <Input placeholder="Buscar alertas, estaciones..." className="w-64 pl-8" disabled />
             </div>
+            <NotificationBell />
             <PushToggle />
             <div className="flex overflow-hidden rounded-md border border-border">
               <Link href="/oficina" className="bg-indigo-50 px-3 py-1.5 text-sm font-semibold text-indigo-700">

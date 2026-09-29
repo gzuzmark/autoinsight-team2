@@ -7,6 +7,8 @@ import {
   eventoNotificacionClick,
   eventoNuevasAlertasVistas,
   eventoOficinaAlertaAbierta,
+  eventoOficinaCampanaAbierta,
+  eventoOficinaNotificacionClick,
   eventoPushCambiado,
 } from "@/lib/analytics/events"
 
@@ -139,6 +141,26 @@ describe("eventoNotificacionClick", () => {
     expect(evento).toEqual({
       name: "notificacion_click",
       properties: { participante: "P3", vista: "oficina", alerta_id: "a1" },
+    })
+  })
+})
+
+describe("eventoOficinaCampanaAbierta (G9)", () => {
+  it("builds oficina_campana_abierta with no extra properties", () => {
+    const evento = eventoOficinaCampanaAbierta({ participante: "P3", vista: "oficina" })
+    expect(evento).toEqual({
+      name: "oficina_campana_abierta",
+      properties: { participante: "P3", vista: "oficina" },
+    })
+  })
+})
+
+describe("eventoOficinaNotificacionClick (G9)", () => {
+  it("builds oficina_notificacion_click with the alert id and desde='campana'", () => {
+    const evento = eventoOficinaNotificacionClick({ participante: "P3", vista: "oficina" }, { alertaId: "a1" })
+    expect(evento).toEqual({
+      name: "oficina_notificacion_click",
+      properties: { participante: "P3", vista: "oficina", alerta_id: "a1", desde: "campana" },
     })
   })
 })

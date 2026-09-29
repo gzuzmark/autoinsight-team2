@@ -29,7 +29,17 @@ self.addEventListener("push", (event) => {
     data: { url: payload.url || URL_POR_DEFECTO },
   }
 
-  event.waitUntil(self.registration.showNotification(titulo, opciones))
+  event.waitUntil(
+    Promise.all([
+      self.registration.showNotification(titulo, opciones),
+      // G9: tell every open office tab to refetch its notification bell
+      // right away instead of waiting up to 15s for the next scheduled
+      // poll.
+      self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+        for (const client of clientList) client.postMessage({ type: "push-recibido" })
+      }),
+    ]),
+  )
 })
 
 self.addEventListener("notificationclick", (event) => {
