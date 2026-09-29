@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
 import { api, ApiError, type LoginResult } from "@/lib/api/client"
 import { createPoller } from "@/lib/api/poller"
 import { derivarVista } from "@/lib/domain/tablero-view"
@@ -17,6 +17,17 @@ import {
 } from "@/lib/domain/ultima-actualizacion-poll"
 import type { IndicadorTablero, Linea, Planta, Tablero, UsuarioLogin } from "@/lib/domain/floor-repository"
 import type { Alerta } from "@/lib/mock-data"
+import {
+  ESTADO_INICIAL_TIMING,
+  msDesdeAbierta,
+  msDesdeMostrada,
+  registrarAbierta,
+  registrarMostradas,
+  type EstadoTimingAlertas,
+} from "@/lib/analytics/alerta-timing"
+import { eventoAlertaAbierta, eventoAlertaMostrada, eventoAlertaResuelta, eventoLogin, eventoNuevasAlertasVistas } from "@/lib/analytics/events"
+import { participanteIdParaIdentificar } from "@/lib/analytics/identify-on-change"
+import { capturarEvento, identificarParticipante, reiniciarIdentidad } from "@/lib/analytics/posthog-client"
 
 type AppState = {
   /** null while the initial GET /api/usuarios is in flight. */
@@ -49,6 +60,9 @@ type AppState = {
   salir: () => void
   marcarAtendida: (id: string) => void
   marcarNoAplica: (id: string) => void
+  /** G8: call when the alert detail panel opens (components/dashboard.tsx's
+   * `abrir`) -- records the open time and fires `eventoAlertaAbierta`. */
+  registrarAperturaAlerta: (id: string) => void
 }
 
 const Ctx = createContext<AppState | null>(null)
@@ -69,14 +83,49 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     ESTADO_INICIAL_ULTIMA_ACTUALIZACION,
   )
 
+  // G8: session-scoped analytics state -- refs (not useState) because
+  // nothing here needs to trigger a re-render on its own; it only feeds
+  // side-effecting PostHog calls made from aplicarTablero/marcarAtendida/
+  // marcarNoAplica/registrarAperturaAlerta/descartarNuevasAlertasPoll
+  // below. Reset on logout (salir) so a new session starts clean.
+  const timingRef = useRef<EstadoTimingAlertas>(ESTADO_INICIAL_TIMING)
+  const participanteIdRef = useRef<string | null>(null)
+
   // G7a: every successful tablero fetch (login, poll tick, or a
   // resolve-triggered refresh) feeds the pure new-alerts-since-poll
   // reducer. Centralized here so the poller/marcarAtendida/marcarNoAplica
   // below don't each have to remember to call it.
+  //
+  // G8: also feeds the alert-timing tracker (fires `alerta_mostrada` for
+  // any alert id seen for the first time this session) and re-identifies
+  // the PostHog participant whenever the tablero's own participant number
+  // changes (participanteIdParaIdentificar -- lib/analytics/identify-on-change.ts).
   const aplicarTablero = useCallback((t: Tablero) => {
     setTablero(t)
     setNuevasAlertasEstado((prev) => registrarPoll(prev, t.alertas))
     setUltimaActualizacionEstado((prev) => registrarPollExitoso(prev, Date.now()))
+
+    const ahora = Date.now()
+    const { estado: nuevoTiming, nuevas } = registrarMostradas(
+      timingRef.current,
+      t.alertas.map((a) => a.id),
+      ahora,
+    )
+    timingRef.current = nuevoTiming
+
+    const nuevoParticipanteId = participanteIdParaIdentificar(participanteIdRef.current, t.participante)
+    if (nuevoParticipanteId) {
+      participanteIdRef.current = nuevoParticipanteId
+      identificarParticipante(nuevoParticipanteId, { usuario: t.usuario.nombre, linea: t.linea.nombre })
+    }
+
+    if (participanteIdRef.current) {
+      const base = { participante: participanteIdRef.current, vista: "planta" as const }
+      t.alertas.forEach((a, posicion) => {
+        if (!nuevas.includes(a.id)) return
+        capturarEvento(eventoAlertaMostrada(base, { alertaId: a.id, severidad: a.severidad, linea: t.linea.nombre, posicion }))
+      })
+    }
   }, [])
 
   useEffect(() => {
@@ -94,21 +143,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  const refrescarTablero = useCallback(async () => {
-    const t = await api.tablero()
-    aplicarTablero(t)
-    setTableroError(null)
-  }, [aplicarTablero])
-
   const ingresar = useCallback(
     async (usuarioId: string, pin: string): Promise<LoginResult> => {
       const resultado = await api.login(usuarioId, pin)
       if (resultado.ok) {
-        await refrescarTablero()
+        const t = await api.tablero()
+        aplicarTablero(t)
+        setTableroError(null)
+        // G8: fired after aplicarTablero so the participant is already
+        // identified (participanteIdRef.current is set) by the time this
+        // event is captured.
+        if (participanteIdRef.current) {
+          capturarEvento(
+            eventoLogin({ participante: participanteIdRef.current, vista: "planta" }, { linea: t.linea.nombre }),
+          )
+        }
       }
       return resultado
     },
-    [refrescarTablero],
+    [aplicarTablero],
   )
 
   const salir = useCallback(() => {
@@ -121,11 +174,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // tablero is null, but reset the timestamp too so a later session
     // never renders a stale "Última actualización" from before this logout.
     setUltimaActualizacionEstado(ESTADO_INICIAL_ULTIMA_ACTUALIZACION)
+    // G8: a new session (next login, possibly a different participant)
+    // must start with a clean PostHog identity and a clean timing state --
+    // never attribute the next session's events to this one.
+    timingRef.current = ESTADO_INICIAL_TIMING
+    participanteIdRef.current = null
+    reiniciarIdentidad()
     void api.logout()
   }, [])
 
   const marcarAtendida = useCallback(
     (id: string) => {
+      capturarResolucion("atendida", id)
       api.resolver(id, "atendida").then(aplicarTablero, () => setTableroError("No se pudo actualizar la alerta."))
     },
     [aplicarTablero],
@@ -133,13 +193,56 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const marcarNoAplica = useCallback(
     (id: string) => {
+      capturarResolucion("no_aplica", id)
       api.resolver(id, "no_aplica").then(aplicarTablero, () => setTableroError("No se pudo actualizar la alerta."))
     },
     [aplicarTablero],
   )
 
+  // G8: shared by marcarAtendida/marcarNoAplica above -- reads the timing
+  // state BEFORE the resolve request (this call's own "now") so
+  // ms_desde_abierta/ms_desde_mostrada reflect when the facilitator/user
+  // actually made the decision, not when the resolve request settles.
+  function capturarResolucion(resolucion: "atendida" | "no_aplica", id: string) {
+    if (!participanteIdRef.current) return
+    const ahora = Date.now()
+    const base = { participante: participanteIdRef.current, vista: "planta" as const }
+    capturarEvento(
+      eventoAlertaResuelta(resolucion, base, {
+        alertaId: id,
+        msDesdeAbierta: msDesdeAbierta(timingRef.current, id, ahora),
+        msDesdeMostrada: msDesdeMostrada(timingRef.current, id, ahora),
+      }),
+    )
+  }
+
+  const registrarAperturaAlerta = useCallback((id: string) => {
+    const ahora = Date.now()
+    timingRef.current = registrarAbierta(timingRef.current, id, ahora)
+    if (!participanteIdRef.current) return
+    capturarEvento(
+      eventoAlertaAbierta(
+        { participante: participanteIdRef.current, vista: "planta" },
+        { alertaId: id, msDesdeMostrada: msDesdeMostrada(timingRef.current, id, ahora) },
+      ),
+    )
+  }, [])
+
   const descartarNuevasAlertasPoll = useCallback(() => {
-    setNuevasAlertasEstado((prev) => descartarPendientes(prev))
+    setNuevasAlertasEstado((prev) => {
+      // G8: capture BEFORE clearing -- prev.pendientes is what is about to
+      // be discarded, an empty dismissal is a no-op event that would tell
+      // the facilitator nothing.
+      if (prev.pendientes.length > 0 && participanteIdRef.current) {
+        capturarEvento(
+          eventoNuevasAlertasVistas(
+            { participante: participanteIdRef.current, vista: "planta" },
+            { cantidad: prev.pendientes.length },
+          ),
+        )
+      }
+      return descartarPendientes(prev)
+    })
   }, [])
 
   // D29/E4: auto-refresh the tablero every 15s while logged in and the page
@@ -217,6 +320,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     salir,
     marcarAtendida,
     marcarNoAplica,
+    registrarAperturaAlerta,
   }
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>

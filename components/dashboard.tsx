@@ -30,6 +30,7 @@ export function Dashboard() {
     tableroError,
     nuevasAlertasPoll,
     descartarNuevasAlertasPoll,
+    registrarAperturaAlerta,
   } = useApp()
 
   // Dashboard only renders once AppProvider has a usuario (see Shell in
@@ -75,6 +76,8 @@ export function Dashboard() {
   function abrir(a: Alerta, el: HTMLButtonElement) {
     disparadorRef.current = el
     setAbierta(a)
+    // G8.
+    registrarAperturaAlerta(a.id)
   }
 
   function cerrarDetalle() {
