@@ -2,18 +2,22 @@ import { randomUUID } from "node:crypto"
 import { activeAlerts, attendAlert, dismissAlert, peorSeveridad } from "@/lib/domain/alerts"
 import { indicadorATablero } from "@/lib/domain/indicadores"
 import { simularTurnoLinea } from "@/lib/domain/simular-turno"
+import { construirIndicadorResumen } from "@/lib/domain/resumen-oficina"
 import type { EscenarioId } from "@/lib/domain/escenarios"
 import { esEscenarioId } from "@/lib/domain/escenarios"
 import type {
   AlertaDetalle,
+  AlertaResumenOficina,
   AlertasPorSeveridad,
   EstadoDemo,
   FloorRepository,
+  IndicadorResumenLinea,
   IndicadorTablero,
   LineaDemoConocida,
   NotificacionAlerta,
   ReporteTurnoDatos,
   Resolucion,
+  ResumenOficina,
   Tablero,
   UsuarioLogin,
 } from "@/lib/domain/floor-repository"
@@ -23,6 +27,7 @@ import {
   InvalidInputError,
   LINEAS_DEMO_CONOCIDAS,
   NOTIFICACIONES_LIMITE,
+  RESUMEN_ULTIMAS_ALERTAS_LIMITE,
   SessionInvalidError,
 } from "@/lib/domain/floor-repository"
 import {
@@ -453,6 +458,53 @@ export class InMemoryFloorRepository implements FloorRepository {
     }
     todas.sort((a, b) => b.creadaEn - a.creadaEn)
     return todas.slice(0, NOTIFICACIONES_LIMITE)
+  }
+
+  async resumenOficina(): Promise<ResumenOficina> {
+    // Batch I's INDICADORES already declares fpy/dph/scrap in that stable
+    // order (mirrored by Batch I's demo_estado_lineas() indicadores field) --
+    // reused here for each clave's display nombre/unidad, never hardcoded a
+    // second time.
+    const indicadores = INDICADORES.map((plantilla) => {
+      const porLinea: IndicadorResumenLinea[] = LINEAS_DEMO_CONOCIDAS.map((nombreLinea) => {
+        const estadoLinea = this.lineasEstado.get(nombreLinea)!
+        const indicador = estadoLinea.indicadoresState.find((i) => i.id === plantilla.id)!
+        return { linea: nombreLinea, valor: indicador.valor, estado: indicadorATablero(indicador).estado }
+      })
+      return construirIndicadorResumen(plantilla.id, plantilla.nombre, plantilla.unidad, porLinea)
+    })
+
+    let alertasAbiertas = 0
+    let alertasAbiertasAlta = 0
+    const ultimasAlertas: AlertaResumenOficina[] = []
+    for (const nombreLinea of LINEAS_DEMO_CONOCIDAS) {
+      const estadoLinea = this.lineasEstado.get(nombreLinea)!
+      const activas = activeAlerts(estadoLinea.alertas)
+      alertasAbiertas += activas.length
+      alertasAbiertasAlta += activas.filter((a) => a.severidad === "parar").length
+      for (const alerta of estadoLinea.alertas) {
+        ultimasAlertas.push({
+          id: alerta.id,
+          titulo: alerta.titulo,
+          severidad: alerta.severidad,
+          linea: nombreLinea,
+          estacion: alerta.estacion || null,
+          estado: alerta.estado,
+          creadaEn: alerta.timestamp,
+        })
+      }
+    }
+    ultimasAlertas.sort((a, b) => b.creadaEn - a.creadaEn)
+
+    return {
+      indicadores,
+      alertasAbiertas,
+      alertasAbiertasAlta,
+      // Mock mode's Alerta carries no resolution timestamp (see
+      // AlertaDetalle's doc) -- honestly always null here, never fabricated.
+      tiempoMedioAtencionMin: null,
+      ultimasAlertas: ultimasAlertas.slice(0, RESUMEN_ULTIMAS_ALERTAS_LIMITE),
+    }
   }
 
   private lineaActiva(): LineaEstado {

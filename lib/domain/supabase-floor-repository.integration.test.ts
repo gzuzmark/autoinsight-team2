@@ -210,6 +210,46 @@ describe.skipIf(!canRun)("SupabaseFloorRepository (integration, local stack)", (
       if (error) throw error
     }
   })
+
+  it("G10: resumenOficina returns real fpy/dph/scrap averages, open-alert counts and latest alerts", async () => {
+    await repo.aplicarEscenario("linea3-parar-alta")
+    try {
+      const resumen = await repo.resumenOficina()
+
+      expect(resumen.indicadores.map((i) => i.clave)).toEqual(["fpy", "dph", "scrap"])
+      for (const indicador of resumen.indicadores) {
+        expect(indicador.porLinea.length).toBeGreaterThan(0)
+      }
+
+      expect(resumen.alertasAbiertas).toBeGreaterThan(0)
+      expect(resumen.alertasAbiertasAlta).toBeGreaterThan(0)
+
+      expect(resumen.ultimasAlertas.length).toBeGreaterThan(0)
+      expect(resumen.ultimasAlertas.some((a) => a.linea === "Línea 3 · Motores")).toBe(true)
+      for (let i = 1; i < resumen.ultimasAlertas.length; i++) {
+        expect(resumen.ultimasAlertas[i - 1].creadaEn).toBeGreaterThanOrEqual(resumen.ultimasAlertas[i].creadaEn)
+      }
+    } finally {
+      await repo.reiniciarDemo()
+    }
+  })
+
+  it("G10: resumenOficina reports a real mean attention time once an alert is resolved", async () => {
+    await repo.aplicarEscenario("linea3-parar-alta")
+    try {
+      const sessionId = await repo.iniciarSesion(ANA_ID, ANA_PIN)
+      const abierta = await repo.alertaAltaMasReciente()
+      expect(abierta).not.toBeNull()
+      await repo.resolverAlerta(sessionId!, abierta!.alerta.id, "atendida")
+      await repo.cerrarSesion(sessionId!)
+
+      const resumen = await repo.resumenOficina()
+      expect(resumen.tiempoMedioAtencionMin).not.toBeNull()
+      expect(resumen.tiempoMedioAtencionMin!).toBeGreaterThanOrEqual(0)
+    } finally {
+      await repo.reiniciarDemo()
+    }
+  })
 })
 
 if (!canRun) {

@@ -3,14 +3,18 @@ import "server-only"
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 import type {
   AlertaDetalle,
+  AlertaResumenOficina,
   EscenarioId,
   EstadoDemo,
   FloorRepository,
+  IndicadorPlantaResumen,
+  IndicadorResumenLinea,
   IndicadorTablero,
   LineaDemoConocida,
   NotificacionAlerta,
   ReporteTurnoDatos,
   Resolucion,
+  ResumenOficina,
   Tablero,
   UsuarioLogin,
 } from "@/lib/domain/floor-repository"
@@ -22,10 +26,17 @@ import {
   esLineaDemoConocida,
   InvalidInputError,
   NOTIFICACIONES_LIMITE,
+  RESUMEN_ULTIMAS_ALERTAS_LIMITE,
   SessionInvalidError,
 } from "@/lib/domain/floor-repository"
+import { construirIndicadorResumen, tiempoMedioAtencionMin } from "@/lib/domain/resumen-oficina"
 import type { Database } from "@/lib/supabase/database.types"
 import type { Alerta, EstadoAlerta, Severidad } from "@/lib/mock-data"
+
+/** G10: fpy/dph/scrap, in that stable order (mirrors Batch I's
+ * demo_estado_lineas() indicadores field and InMemoryFloorRepository's own
+ * INDICADORES declaration order). */
+const CLAVES_RESUMEN = ["fpy", "dph", "scrap"] as const
 
 /**
  * Real-backend adapter (D19/D20): calls the SECURITY DEFINER RPCs in
@@ -335,6 +346,72 @@ export class SupabaseFloorRepository implements FloorRepository {
     }))
   }
 
+  async resumenOficina(): Promise<ResumenOficina> {
+    // G10: plain selects (like G7b/G9 above), not a new RPC -- every read
+    // here is a read-only aggregate over public tables the service-role
+    // client already bypasses RLS for.
+    const ventana24hIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    const [indicadoresResult, abiertasResult, altaResult, resueltasResult, ultimasResult] = await Promise.all([
+      this.client.from("indicadores").select("clave,nombre,unidad,valor,estado,lineas(nombre)"),
+      this.client.from("alertas").select("id", { count: "exact", head: true }).eq("estado", "nueva"),
+      this.client
+        .from("alertas")
+        .select("id", { count: "exact", head: true })
+        .eq("estado", "nueva")
+        .eq("severidad", "parar"),
+      this.client
+        .from("alertas")
+        .select("creada_en,resuelta_en")
+        .not("resuelta_en", "is", null)
+        .gte("resuelta_en", ventana24hIso),
+      this.client
+        .from("alertas")
+        .select("id,titulo,severidad,estado,creada_en,lineas(nombre),estaciones(nombre)")
+        .order("creada_en", { ascending: false })
+        .limit(RESUMEN_ULTIMAS_ALERTAS_LIMITE),
+    ])
+    if (indicadoresResult.error) throw this.mapError(indicadoresResult.error)
+    if (abiertasResult.error) throw this.mapError(abiertasResult.error)
+    if (altaResult.error) throw this.mapError(altaResult.error)
+    if (resueltasResult.error) throw this.mapError(resueltasResult.error)
+    if (ultimasResult.error) throw this.mapError(ultimasResult.error)
+
+    const filasIndicadores = (indicadoresResult.data ?? []) as unknown as IndicadorResumenRow[]
+    const indicadores: IndicadorPlantaResumen[] = CLAVES_RESUMEN.map((clave) => {
+      const filas = filasIndicadores.filter((f) => f.clave === clave && esLineaDemoConocida(f.lineas?.nombre))
+      const porLinea: IndicadorResumenLinea[] = filas.map((f) => ({
+        linea: f.lineas!.nombre as LineaDemoConocida,
+        valor: f.valor,
+        estado: f.estado,
+      }))
+      return construirIndicadorResumen(clave, filas[0]?.nombre ?? clave, filas[0]?.unidad ?? "", porLinea)
+    })
+
+    const resueltasRecientes = (resueltasResult.data ?? []).map((r) => ({
+      creadaEn: new Date(r.creada_en).getTime(),
+      resueltaEn: r.resuelta_en ? new Date(r.resuelta_en).getTime() : null,
+    }))
+
+    const filasUltimas = (ultimasResult.data ?? []) as unknown as AlertaResumenRow[]
+    const ultimasAlertas: AlertaResumenOficina[] = filasUltimas.map((row) => ({
+      id: row.id,
+      titulo: row.titulo,
+      severidad: row.severidad,
+      linea: row.lineas?.nombre ?? "",
+      estacion: row.estaciones?.nombre ?? null,
+      estado: row.estado,
+      creadaEn: new Date(row.creada_en).getTime(),
+    }))
+
+    return {
+      indicadores,
+      alertasAbiertas: abiertasResult.count ?? 0,
+      alertasAbiertasAlta: altaResult.count ?? 0,
+      tiempoMedioAtencionMin: tiempoMedioAtencionMin(resueltasRecientes, Date.now()),
+      ultimasAlertas,
+    }
+  }
+
   private mapTablero(row: TableroRow, participante: number): Tablero {
     return {
       planta: { nombre: row.planta.nombre },
@@ -384,6 +461,30 @@ export class SupabaseFloorRepository implements FloorRepository {
 /** Shape of a `public.alertas` row joined to its `lineas`/`estaciones` name
  * (see `obtenerAlerta`'s select -- PostgREST embeds the related row under
  * the table name, singular relation). */
+/** Shape of one `public.indicadores` row joined to its `lineas` name (G10:
+ * resumenOficina's plain select). */
+type IndicadorResumenRow = {
+  clave: string
+  nombre: string
+  unidad: string
+  valor: number
+  estado: Severidad
+  lineas: { nombre: string } | null
+}
+
+/** Shape of one `public.alertas` row joined to `lineas`/`estaciones` (G10:
+ * resumenOficina's "Últimas alertas" plain select -- any severity/estado,
+ * unlike NotificacionAlerta's ALTA-only bell rows). */
+type AlertaResumenRow = {
+  id: string
+  titulo: string
+  severidad: Severidad
+  estado: EstadoAlerta
+  creada_en: string
+  lineas: { nombre: string } | null
+  estaciones: { nombre: string } | null
+}
+
 type AlertaDetalleRow = {
   id: string
   severidad: Severidad

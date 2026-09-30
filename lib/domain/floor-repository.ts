@@ -217,6 +217,71 @@ export type NotificacionAlerta = {
   creadaEn: number
 }
 
+/** G10: office Resumen -- one line's own reading for one plant-level KPI
+ * (fpy/dph/scrap), used both to compute the plant average/worst-state and as
+ * the per-line tooltip breakdown on the KPI card. */
+export type IndicadorResumenLinea = {
+  linea: LineaDemoConocida
+  valor: number
+  estado: Severidad
+}
+
+/** G10: one plant-level KPI card on the office Resumen -- the average of the
+ * three lines' current `valor` for this `clave` (fpy/dph/scrap), with the
+ * worst per-line state (never averaged: a single line in "parar" must not
+ * be hidden by the other two being "ok") and the per-line breakdown for a
+ * tooltip/subtitle. */
+export type IndicadorPlantaResumen = {
+  clave: string
+  nombre: string
+  unidad: string
+  /** Plant-level average of `porLinea[].valor`, rounded to 1 decimal. */
+  promedio: number
+  /** Worst of `porLinea[].estado` (lib/domain/alerts.ts#peorSeveridad). */
+  estado: Severidad
+  porLinea: IndicadorResumenLinea[]
+}
+
+/** G10: office Resumen -- one row of the "Últimas alertas" table. Unlike
+ * `NotificacionAlerta` (ALTA-only, for the bell), this includes every
+ * severity and both open and resolved alerts, since the Resumen table shows
+ * the plant's most recent activity, not just critical/unread ones. */
+export type AlertaResumenOficina = {
+  id: string
+  titulo: string
+  severidad: Severidad
+  linea: string
+  estacion: string | null
+  estado: EstadoAlerta
+  creadaEn: number
+}
+
+/** G10: office Resumen -- both adapters cap the "Últimas alertas" table at
+ * this many rows (decided 2026-09-29: the Resumen table is a glance-only
+ * summary, not the full alert list -- see AlertaResumenOficina's doc). */
+export const RESUMEN_ULTIMAS_ALERTAS_LIMITE = 8
+
+/** G10: office Resumen ("/oficina") real-data payload -- plant-level KPI
+ * averages (fpy/dph/scrap, in that stable order), open-alert counts, mean
+ * attention time, and the latest alerts across every known line. Unlike the
+ * floor's `Tablero`, this is line-agnostic (no session) and shows real
+ * numbers (O-D4). */
+export type ResumenOficina = {
+  /** fpy, dph, scrap, in that stable order (mirrors LineaEstadoDemo#indicadores). */
+  indicadores: IndicadorPlantaResumen[]
+  alertasAbiertas: number
+  /** Subset of `alertasAbiertas` with severidad "parar" (ALTA). */
+  alertasAbiertasAlta: number
+  /** Mean minutes between creation and resolution for alerts resolved in the
+   * last 24h; null when none resolved in that window -- rendered "—" by the
+   * client, never fabricated as 0 (mirrors AlertaDetalle's "never a
+   * fabricated number" doc). Always null in mock mode: `InMemoryFloorRepository`'s
+   * `Alerta` shape carries no resolution timestamp (see AlertaDetalle's doc). */
+  tiempoMedioAtencionMin: number | null
+  /** Newest first, capped at RESUMEN_ULTIMAS_ALERTAS_LIMITE. */
+  ultimasAlertas: AlertaResumenOficina[]
+}
+
 /** No/expired/invalid session (maps from Postgres errcode 28000). */
 export class SessionInvalidError extends Error {
   constructor(message = "Invalid session.") {
@@ -325,4 +390,8 @@ export interface FloorRepository {
    * alert should still see it happened. Never requires a floor session,
    * same as `alertaAltaMasReciente`. */
   alertasAltaRecientes(): Promise<NotificacionAlerta[]>
+
+  /** G10: office Resumen real-data payload (see ResumenOficina's doc). Never
+   * requires a floor session, same as alertasAltaRecientes/obtenerAlerta. */
+  resumenOficina(): Promise<ResumenOficina>
 }

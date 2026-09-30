@@ -572,4 +572,52 @@ describe("InMemoryFloorRepository", () => {
       expect(resultado.length).toBeLessThanOrEqual(20)
     })
   })
+
+  describe("resumenOficina (G10: office Resumen real data)", () => {
+    it("returns fpy/dph/scrap plant averages, in that stable order", async () => {
+      const resumen = await repo.resumenOficina()
+      expect(resumen.indicadores.map((i) => i.clave)).toEqual(["fpy", "dph", "scrap"])
+      for (const indicador of resumen.indicadores) {
+        expect(indicador.porLinea).toHaveLength(3)
+        expect(indicador.promedio).toBeGreaterThan(0)
+      }
+    })
+
+    it("counts open alerts and the ALTA subset from the seeded Línea 3 alert", async () => {
+      const resumen = await repo.resumenOficina()
+      expect(resumen.alertasAbiertas).toBeGreaterThan(0)
+      expect(resumen.alertasAbiertasAlta).toBeGreaterThan(0)
+      expect(resumen.alertasAbiertasAlta).toBeLessThanOrEqual(resumen.alertasAbiertas)
+    })
+
+    it("reports 0 open alerts after 'todo-ok'", async () => {
+      await repo.aplicarEscenario("todo-ok")
+      const resumen = await repo.resumenOficina()
+      expect(resumen.alertasAbiertas).toBe(0)
+      expect(resumen.alertasAbiertasAlta).toBe(0)
+    })
+
+    it("always reports null attention time in mock mode (no resolution timestamp tracked)", async () => {
+      const sessionId = (await repo.iniciarSesion(ANA.id, ANA.pin))!
+      const tablero = await repo.tablero(sessionId)
+      await repo.resolverAlerta(sessionId, tablero.alertas[0].id, "atendida")
+      const resumen = await repo.resumenOficina()
+      expect(resumen.tiempoMedioAtencionMin).toBeNull()
+    })
+
+    it("returns the latest alerts across lines, newest first, capped, any severity/estado", async () => {
+      const resumen = await repo.resumenOficina()
+      expect(resumen.ultimasAlertas.length).toBeGreaterThan(0)
+      expect(resumen.ultimasAlertas.length).toBeLessThanOrEqual(8)
+      for (let i = 1; i < resumen.ultimasAlertas.length; i++) {
+        expect(resumen.ultimasAlertas[i - 1].creadaEn).toBeGreaterThanOrEqual(resumen.ultimasAlertas[i].creadaEn)
+      }
+    })
+
+    it("includes alerts from a scenario applied on another known line", async () => {
+      await repo.aplicarEscenario("muchas-media")
+      const resumen = await repo.resumenOficina()
+      expect(resumen.ultimasAlertas.some((a) => a.linea === LINEA_ACTIVA)).toBe(true)
+    })
+  })
 })
