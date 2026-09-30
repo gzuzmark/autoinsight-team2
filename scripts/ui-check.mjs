@@ -421,12 +421,15 @@ async function runScenariosAtViewport(browser, viewport, allViolations) {
 }
 
 // Office smoke (O5): the office desk view (/, /oficina, /oficina/alertas/[id],
-// /oficina/reportes) is static and not held to the floor's 24px text / 88px
-// touch target rules (O-D3) -- this only asserts no horizontal overflow and
-// no console errors on those pages, plus the three cross-app navigation
-// links. `/` is the one exception: it is the tablet's entry point, so it
-// still follows the floor rules (O-D1), checked the same way the floor
-// scenario checks `/planta`.
+// /oficina/reportes) is not held to the floor's 24px text / 88px touch
+// target rules (O-D3) -- this only asserts no horizontal overflow and no
+// console errors on those pages, plus the three cross-app navigation links.
+// `/` is the one exception: it is the tablet's entry point, so it still
+// follows the floor rules (O-D1), checked the same way the floor scenario
+// checks `/planta`. G10: `/oficina` additionally asserts its KPI cards show
+// a real value and its "Últimas alertas" table has at least one real
+// (mock-mode) alert row -- the rest of the office (`/oficina/alertas/[id]`,
+// `/oficina/reportes`) stays static sample content.
 const SAMPLE_ALERT_ID = "torque-fuera-de-rango-l3-e7"
 // G7b: a real (mock-mode InMemoryFloorRepository) seeded alert id --
 // lib/mock-data.ts's ALERTAS_INICIALES -- so the investigation screen's
@@ -522,6 +525,17 @@ async function runOfficeScenariosAtViewport(browser, viewport, allViolations) {
     await page.goto(`${BASE_URL}/oficina`, { waitUntil: "networkidle" })
     await page.getByRole("heading", { name: "Resumen de planta" }).waitFor({ state: "visible" })
     await checkOverflow("oficina resumen")
+
+    // G10: the KPI cards render real resumenOficina() data (server-fetched,
+    // dynamic render -- see app/oficina/page.tsx's `export const dynamic`)
+    // -- "Alertas abiertas" always has a numeric value in mock mode.
+    await page.getByText("Alertas abiertas", { exact: true }).waitFor({ state: "visible" })
+
+    // G10: "Últimas alertas" links to a real alert id (lib/mock-data.ts's
+    // seeded "a1"), not just the static samples the investigation screen
+    // also serves -- proves the table is fed by the real repository, not
+    // the old static ALERTAS array.
+    await page.getByRole("link", { name: /FPY por debajo del 90 %|Torque fuera de rango/ }).first().waitFor({ state: "visible" })
 
     // G7b: the office header's "Activar notificaciones" button is present
     // at every viewport (whatever its resolved state -- no-soportado in a

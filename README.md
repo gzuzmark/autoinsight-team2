@@ -27,15 +27,28 @@ Open [http://localhost:3100](http://localhost:3100) with your browser to see the
 - `/planta` -- the plant-floor tablet app (login, PIN, dashboard, alerts). This
   is the app that used to live at `/`; floor tablets must be pointed at
   `/planta` directly. You can start editing it by modifying `app/planta/page.tsx`.
-- `/oficina` -- office desk view: Resumen de planta (KPIs, FPY trend, defect
-  Pareto, alert heatmap, latest alerts). Not subject to the floor design rules
-  (D5/D11/D12) -- see `app/oficina/**` and `components/oficina/**`.
+- `/oficina` -- office desk view: Resumen de planta. Not subject to the floor
+  design rules (D5/D11/D12) -- see `app/oficina/**` and `components/oficina/**`.
+  G10: the 5 KPI cards (FPY/Defectos por hora/Scrap plant averages -- worst
+  per-line state, per-line breakdown as a tooltip -- Alertas abiertas with its
+  ALTA subset, and Tiempo medio de atención, "—" when nothing resolved in the
+  last 24h) and the "Últimas alertas" table (any severity/estado, across every
+  known line, linking to the real investigation screen) are wired to
+  `FloorRepository#resumenOficina()` -- real data in both mock and Supabase
+  mode, fetched server-side on first render and polled every 15s while the
+  tab is visible (`GET /api/oficina/resumen`, same D29-style pattern as the
+  floor tablero and the notification bell). The header subtitle shows
+  "actualizado hace X" from the last successful fetch. FPY trend, Pareto de
+  defectos and the alert heatmap have no real backing data yet and stay
+  labeled "Ejemplo"; the filter bar is also labeled "Ejemplo" (non-functional,
+  O-D4). There is no historical comparison data, so the KPI cards show no
+  delta/trend arrow any more (removed rather than fabricated).
 - `/oficina/alertas/[id]` -- alert investigation screen. G7b: loads real
   alert data (`FloorRepository#obtenerAlerta`) first for any known alert
   id, across every line; the original static samples
-  (`lib/oficina/mock-data.ts`) still work for their own sample ids (the
-  Resumen table links to those). See "Office push notifications" below for
-  what's real vs. "Ejemplo" on a real alert.
+  (`lib/oficina/mock-data.ts`) still work for their own sample ids. See
+  "Office push notifications" below for what's real vs. "Ejemplo" on a real
+  alert.
 - `/oficina/reportes` -- report list and "Programar reporte" form.
 - `/backoffice` -- facilitator back office for guerrilla-testing sessions:
   reset the demo (`POST /api/backoffice/reiniciar`), trigger a shift per
