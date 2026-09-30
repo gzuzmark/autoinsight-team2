@@ -1,7 +1,11 @@
 import { Download, LayoutGrid } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 
 // Non-functional filter bar (static demo, O-D4): plain disabled selects, no
-// client interactivity needed for a screen that never calls an API.
+// client interactivity needed for a screen that never calls an API. G10:
+// labeled "Ejemplo" (same convention as the alert investigation page's
+// sample-data badges) since the KPI cards/table next to it are now real but
+// this bar still cannot actually filter them.
 function FiltroEstatico({ label, valor }: { label: string; valor: string }) {
   return (
     <label className="flex items-center gap-1 text-sm text-neutral-700">
@@ -20,6 +24,7 @@ export function FilterBar() {
         <span className="flex items-center gap-1 text-sm font-medium text-neutral-700">
           <LayoutGrid className="size-4" aria-hidden />
         </span>
+        <Badge variant="outline">Ejemplo</Badge>
         <FiltroEstatico label="" valor="Planta Norte" />
         <FiltroEstatico label="" valor="Todas las líneas" />
         <FiltroEstatico label="Turno:" valor="todos" />

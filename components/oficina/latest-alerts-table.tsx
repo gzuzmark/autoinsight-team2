@@ -1,15 +1,20 @@
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { VARIANTE_POR_GRAVEDAD, type AlertaOficina } from "@/lib/oficina/mock-data"
+import { VARIANTE_POR_GRAVEDAD, type EstadoAlerta } from "@/lib/oficina/mock-data"
+import type { FilaTablaAlertas } from "@/lib/oficina/resumen-vista"
 
-const COLOR_ESTADO: Record<AlertaOficina["estado"], string> = {
+const COLOR_ESTADO: Record<EstadoAlerta, string> = {
   Nueva: "text-indigo-700",
   Atendida: "text-emerald-700",
   "No aplica": "text-neutral-500",
 }
 
-export function LatestAlertsTable({ alertas }: { alertas: AlertaOficina[] }) {
+// G10: takes the narrower FilaTablaAlertas shape (id/gravedad/titulo/
+// lineaEstacion/estado/hace) instead of the full sample AlertaOficina --
+// a real resumenOficina() row has no chart/8D/history backing data, so it
+// is never fabricated just to satisfy this table's prop type.
+export function LatestAlertsTable({ alertas }: { alertas: FilaTablaAlertas[] }) {
   return (
     <Table>
       <TableHeader>

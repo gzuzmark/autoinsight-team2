@@ -41,7 +41,11 @@ export function OfficeShell({
 }: {
   pathname: string
   title: string
-  subtitle: string
+  // G10: a plain string on every static screen, or a small client component
+  // (e.g. ResumenSubtitle) on /oficina, so the header can show a live
+  // "actualizado hace X" without turning this whole shell into a client
+  // component.
+  subtitle: React.ReactNode
   children: React.ReactNode
 }) {
   return (
